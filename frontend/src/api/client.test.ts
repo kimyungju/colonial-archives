@@ -25,11 +25,14 @@ describe("apiClient", () => {
       question: "Who governed the Straits?",
     });
 
-    expect(mockFetch).toHaveBeenCalledWith("/api/query", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: "Who governed the Straits?" }),
-    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/query",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: "Who governed the Straits?" }),
+      })
+    );
     expect(result.answer).toBe("Test answer");
   });
 
@@ -106,5 +109,86 @@ describe("apiClient", () => {
     await expect(apiClient.postQuery({ question: "test" })).rejects.toThrow(
       "API error 500"
     );
+  });
+});
+
+describe("apiClient timeout", () => {
+  it("postQuery aborts after the timeout and surfaces a clear error", async () => {
+    vi.useFakeTimers();
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+
+    let abortSignal: AbortSignal | undefined;
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      abortSignal = init.signal as AbortSignal;
+      return new Promise((_resolve, reject) => {
+        if (abortSignal) {
+          abortSignal.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }
+      });
+    });
+
+    const promise = apiClient.postQuery({ question: "anything" });
+    // Attach the rejection assertion BEFORE advancing timers so the
+    // rejection isn't briefly unhandled (which vitest flags as an
+    // unhandled error even when the assertion later catches it).
+    const assertion = expect(promise).rejects.toThrow(/timed out/i);
+
+    await vi.advanceTimersByTimeAsync(91_000);
+    await assertion;
+    vi.useRealTimers();
+  });
+
+  it("caller-provided AbortSignal cancels the request before the timeout", async () => {
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        (init.signal as AbortSignal).addEventListener("abort", () =>
+          reject(new DOMException("Aborted", "AbortError")),
+        );
+      });
+    });
+
+    const controller = new AbortController();
+    const promise = apiClient.postQuery(
+      { question: "anything" },
+      { signal: controller.signal },
+    );
+
+    controller.abort();
+
+    await expect(promise).rejects.toThrow();
+    await expect(promise).rejects.not.toThrow(/timed out/i);
+  });
+
+  it("already-aborted signal rejects without making a fetch call", async () => {
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        if ((init.signal as AbortSignal).aborted) {
+          reject(new DOMException("Aborted", "AbortError"));
+          return;
+        }
+        (init.signal as AbortSignal).addEventListener("abort", () =>
+          reject(new DOMException("Aborted", "AbortError")),
+        );
+      });
+    });
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const promise = apiClient.postQuery(
+      { question: "anything" },
+      { signal: controller.signal },
+    );
+
+    await expect(promise).rejects.toThrow();
   });
 });

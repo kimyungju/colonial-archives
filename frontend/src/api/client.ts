@@ -9,24 +9,79 @@ import type {
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      `API error ${res.status}: ${body.detail ?? res.statusText}`
-    );
+const DEFAULT_TIMEOUT_MS = 60_000;
+const QUERY_TIMEOUT_MS = 90_000;
+
+async function request<T>(
+  url: string,
+  init?: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  // Compose timeout abort with any caller-provided signal so component
+  // unmount / superseded-request cancellation still works. We do NOT
+  // rely on AbortSignal.any (ES2024, not yet universally available).
+  const callerSignal = init?.signal;
+  let onCallerAbort: (() => void) | null = null;
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      onCallerAbort = () => controller.abort();
+      callerSignal.addEventListener("abort", onCallerAbort, { once: true });
+    }
   }
-  return res.json() as Promise<T>;
+
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(
+        `API error ${res.status}: ${body.detail ?? res.statusText}`,
+      );
+    }
+    return (await res.json()) as T;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      // Distinguish caller-cancelled from timeout-cancelled. If the
+      // caller's signal triggered, surface that (so React StrictMode /
+      // navigation aborts don't look like timeouts).
+      if (callerSignal?.aborted) {
+        throw err;
+      }
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    if (callerSignal && onCallerAbort) {
+      callerSignal.removeEventListener("abort", onCallerAbort);
+    }
+  }
 }
 
 export const apiClient = {
-  postQuery(req: QueryRequest): Promise<QueryResponse> {
-    return request<QueryResponse>(`${API_BASE}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req),
-    });
+  // postQuery accepts an optional AbortSignal so callers (e.g. a
+  // useEffect cleanup or a "supersede previous query" handler in
+  // useAppStore.sendQuery) can cancel an in-flight request without
+  // waiting for the 90s hard timeout. The wrapper composes this
+  // signal with its own timeout controller — see request().
+  postQuery(
+    req: QueryRequest,
+    options?: { signal?: AbortSignal },
+  ): Promise<QueryResponse> {
+    return request<QueryResponse>(
+      `${API_BASE}/query`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+        signal: options?.signal,
+      },
+      QUERY_TIMEOUT_MS,
+    );
   },
 
   getSignedUrl(docId: string, page: number): Promise<SignedUrlResponse> {
