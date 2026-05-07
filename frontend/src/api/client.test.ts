@@ -115,30 +115,33 @@ describe("apiClient", () => {
 describe("apiClient timeout", () => {
   it("postQuery aborts after the timeout and surfaces a clear error", async () => {
     vi.useFakeTimers();
-    const mockFetch = vi.fn();
-    vi.stubGlobal("fetch", mockFetch);
+    try {
+      const mockFetch = vi.fn();
+      vi.stubGlobal("fetch", mockFetch);
 
-    let abortSignal: AbortSignal | undefined;
-    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
-      abortSignal = init.signal as AbortSignal;
-      return new Promise((_resolve, reject) => {
-        if (abortSignal) {
-          abortSignal.addEventListener("abort", () =>
-            reject(new DOMException("Aborted", "AbortError")),
-          );
-        }
+      let abortSignal: AbortSignal | undefined;
+      mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+        abortSignal = init.signal as AbortSignal;
+        return new Promise((_resolve, reject) => {
+          if (abortSignal) {
+            abortSignal.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            );
+          }
+        });
       });
-    });
 
-    const promise = apiClient.postQuery({ question: "anything" });
-    // Attach the rejection assertion BEFORE advancing timers so the
-    // rejection isn't briefly unhandled (which vitest flags as an
-    // unhandled error even when the assertion later catches it).
-    const assertion = expect(promise).rejects.toThrow(/timed out/i);
+      const promise = apiClient.postQuery({ question: "anything" });
+      // Attach the rejection assertion BEFORE advancing timers so the
+      // rejection isn't briefly unhandled (which vitest flags as an
+      // unhandled error even when the assertion later catches it).
+      const assertion = expect(promise).rejects.toThrow(/timed out/i);
 
-    await vi.advanceTimersByTimeAsync(91_000);
-    await assertion;
-    vi.useRealTimers();
+      await vi.advanceTimersByTimeAsync(91_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("caller-provided AbortSignal cancels the request before the timeout", async () => {
