@@ -275,13 +275,20 @@ class TestExtractEntityHints:
         assert "resident" in combined or "singapore" in combined
 
     def test_mixed_case_query(self, service):
-        """Mixed case queries should extract both original and title-cased hints."""
+        """Capitalised tokens take priority; lowercase fallback is skipped
+        when priorities 1+2 produce hits (see TestEntityHintCap).
+
+        This is an intentional behaviour change from the previous
+        title-case fallback: "singapore" (lowercase) is NOT extracted
+        because "Raffles" already satisfied priority 2. Neo4j's
+        full-text index can still surface the singapore entity at
+        search time via the other hint(s)."""
         hints = service._extract_entity_hints(
             "What did Raffles do in singapore?"
         )
         hint_words = " ".join(hints).lower()
         assert "raffles" in hint_words
-        assert "singapore" in hint_words
+        assert "singapore" not in hint_words
 
     def test_empty_query_returns_empty(self, service):
         """Empty query string should return no hints."""
@@ -384,3 +391,65 @@ class TestArchiveFirstBehavior:
             assert result.source_type == "web_fallback"
             assert "not found in the colonial archive" in result.answer.lower()
             mock_web.search.assert_called_once()
+
+
+class TestEntityHintCap:
+    """A long question must not produce an unbounded number of entity
+    hints, AND the cap must not silently drop the entities that actually
+    matter for graph search."""
+
+    def test_long_lowercase_question_caps_hints(self, service):
+        question = (
+            "what was the impact of the opium revenue policy on the merchants "
+            "and ports of singapore during the eighteen thirties when raffles "
+            "and farquhar and crawfurd were active in the straits settlements"
+        )
+        hints = service._extract_entity_hints(question)
+        assert len(hints) <= 6, f"Expected <= 6 hints, got {len(hints)}: {hints}"
+
+    def test_long_lowercase_question_prefers_long_entity_like_words(self, service):
+        """For an all-lowercase question, the length-ranked fallback
+        must surface long entity-like words (proper nouns tend to be
+        longer than common nouns) instead of being starved by short
+        common-noun noise that appears earlier in question order.
+
+        This is a heuristic, not a strict guarantee — we cannot
+        identify proper nouns without a graph lookup. The assertion
+        is therefore: at least 2 of the canonical proper-noun tokens
+        (singapore/farquhar/crawfurd/settlements/merchants) must
+        survive the cap. The actual entities are ultimately resolved
+        by the Neo4j full-text index at search time."""
+        question = (
+            "what was the impact of the opium revenue policy on the merchants "
+            "and ports of singapore during the eighteen thirties when raffles "
+            "and farquhar and crawfurd were active in the straits settlements"
+        )
+        hints = [h.lower() for h in service._extract_entity_hints(question)]
+        long_entities = {"singapore", "farquhar", "crawfurd", "settlements",
+                         "merchants", "thirties", "eighteen"}
+        retained = [h for h in hints if h in long_entities]
+        assert len(retained) >= 2, (
+            f"Length-ranked fallback failed to retain >=2 long entity-like "
+            f"tokens. Got hints: {hints}; long-token retained: {retained}"
+        )
+        assert any("singapore" in h for h in hints), (
+            f"'singapore' (9 chars) was dropped by the cap. Got: {hints}"
+        )
+
+    def test_short_question_unaffected(self, service):
+        hints = service._extract_entity_hints("Who governed Singapore in 1830?")
+        assert 0 < len(hints) <= 6
+        assert any("singapore" in h.lower() for h in hints)
+
+    def test_capitalised_phrases_take_priority_over_fallback(self, service):
+        """When the user provides original-case proper nouns, the
+        fallback's 4+ char word scan must NOT run — otherwise the cap
+        fills with low-confidence words and crowds out real entities."""
+        question = "Tell me about Singapore and the opium trade with Penang"
+        hints = service._extract_entity_hints(question)
+        lower = [h.lower() for h in hints]
+        assert "singapore" in lower
+        assert "penang" in lower
+        assert "opium" not in lower, (
+            f"Fallback ran even though priorities 1+2 had hits: {hints}"
+        )

@@ -361,71 +361,90 @@ class HybridRetrievalService:
         "role", "work", "part", "thing", "time", "year",
     }
 
+    # Cap to bound Neo4j fan-out from `search_entities` (one query per hint).
+    # A long lowercase question can otherwise yield 20+ hints because
+    # `question.title()` makes every word a multi-word regex match candidate.
+    _MAX_ENTITY_HINTS = 6
+
     @staticmethod
     def _extract_entity_hints(question: str) -> list[str]:
         """Extract likely entity names from the question.
 
-        Uses simple heuristics — capitalized multi-word phrases, proper
-        nouns, and title-cased versions of multi-word sequences.
-        No LLM call to keep latency low.
+        Priority order (so the cap doesn't drop real entities):
+          1. Multi-word phrases the user originally capitalised
+             ("Sir Stamford Raffles", "Straits Settlements").
+          2. Single capitalised words from the original input
+             ("Singapore", "Opium").
+          3. Lowercase fallback: 4+ char content words, non-stop-word,
+             RANKED BY LENGTH (descending) before applying the cap.
+             This ranking is a coarse heuristic — proper nouns
+             ("Singapore", "Settlements", "Farquhar") tend to be longer
+             than common nouns ("policy", "ports") that share the
+             field. Without a ranking pass the first-six-in-question-
+             order truncation drops real entities that appear later in
+             a long sentence.
 
-        Strategy:
-        1. Title-case the query so lowercase queries still produce hints
-        2. Apply multi-word and single-word capitalized regex patterns
-        3. Filter out stop words after extraction
-        4. Fallback: if regex yields nothing, extract any word with 4+
-           characters that is not a common English stop word
+        Limitation: lowercase entity extraction is fundamentally
+        ambiguous without a graph lookup. Word length is a weak
+        proxy for "is this a proper noun". The Neo4j full-text index
+        will still surface real entities at search time even if some
+        regex hints are weak — `_graph_search` only fails when ALL
+        hints miss, which is rare in practice. A future improvement
+        is to feed the question text directly to
+        ``db.index.fulltext.queryNodes`` and let Neo4j produce the
+        candidate entity list.
+
+        We deliberately skip the title-cased multi-word regex from the
+        previous implementation: applying it to ``question.title()``
+        produced noise hits like "What Was" and "Of The Opium" that
+        starved the cap.
         """
         stop_words = HybridRetrievalService._STOP_WORDS
+        max_hints = HybridRetrievalService._MAX_ENTITY_HINTS
 
-        # Title-case the query so lowercase inputs produce capitalized words
-        title_q = question.title()
+        multi_pattern = r"\b(?:[A-Z][a-z.]+(?:\s+[A-Z][a-z.]+)+)\b"
+        single_pattern = r"\b([A-Z][a-z]{2,})\b"
 
-        # Find sequences of capitalized words (2+ words = likely entity)
-        pattern = r"\b(?:[A-Z][a-z.]+(?:\s+[A-Z][a-z.]+)+)\b"
+        hints: list[str] = []
 
-        # Try on original text first
-        multi_word = re.findall(pattern, question)
+        # Priority 1: multi-word proper-noun phrases in original casing
+        for phrase in re.findall(multi_pattern, question):
+            words = [w for w in phrase.split() if w.lower() not in stop_words]
+            if not words:
+                continue
+            cleaned = " ".join(words)
+            if cleaned not in hints:
+                hints.append(cleaned)
 
-        # Also try on title-cased text to catch lowercase queries
-        title_multi = re.findall(pattern, title_q)
+        # Priority 2: single capitalised words from original casing
+        for word in re.findall(single_pattern, question):
+            if word.lower() in stop_words:
+                continue
+            if any(word.lower() in mw.lower() for mw in hints):
+                continue
+            hints.append(word)
 
-        # Merge, filtering out stop-word-only matches
-        all_multi: list[str] = []
-        for phrase in multi_word + title_multi:
-            words = phrase.split()
-            non_stop = [w for w in words if w.lower() not in stop_words]
-            if non_stop:
-                cleaned = " ".join(non_stop)
-                if cleaned not in all_multi:
-                    all_multi.append(cleaned)
+        # If priorities 1+2 produced anything, return them — do NOT
+        # dilute with lowercase fallback noise.
+        if hints:
+            return hints[:max_hints]
 
-        # Single capitalized words from original
-        single_caps = re.findall(r"\b([A-Z][a-z]{2,})\b", question)
-        single_caps = [w for w in single_caps if w.lower() not in stop_words]
+        # Priority 3: all-lowercase input fallback. Extract 4+ char
+        # content words and rank by length DESCENDING (then by original
+        # order for stable tie-break) before applying the cap.
+        candidates: list[tuple[int, int, str]] = []
+        seen_titled: set[str] = set()
+        for idx, w in enumerate(re.findall(r"\b([a-zA-Z]{4,})\b", question)):
+            if w.lower() in stop_words:
+                continue
+            titled = w.title()
+            if titled in seen_titled:
+                continue
+            seen_titled.add(titled)
+            candidates.append((-len(w), idx, titled))
 
-        # Also from title-cased version
-        title_singles = re.findall(r"\b([A-Z][a-z]{2,})\b", title_q)
-        title_singles = [w for w in title_singles if w.lower() not in stop_words]
-
-        all_singles = list(dict.fromkeys(single_caps + title_singles))
-
-        # Combine: multi-word first, then singles not already covered
-        hints: list[str] = list(all_multi)
-        for word in all_singles:
-            if not any(word.lower() in mw.lower() for mw in all_multi):
-                hints.append(word)
-
-        # Fallback: if no hints found, extract any word with 4+ characters
-        # that is not a stop word (simple keyword approach)
-        if not hints:
-            words = re.findall(r"\b([a-zA-Z]{4,})\b", question)
-            for w in words:
-                titled = w.title()
-                if w.lower() not in stop_words and titled not in hints:
-                    hints.append(titled)
-
-        return hints
+        candidates.sort()
+        return [titled for _len, _idx, titled in candidates[:max_hints]]
 
     # ------------------------------------------------------------------
     # Graph search
