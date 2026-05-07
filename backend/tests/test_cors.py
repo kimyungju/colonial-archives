@@ -4,8 +4,6 @@ allow_origins=["*"] combined with allow_credentials=True is rejected by
 all major browsers. This test enforces the wildcard/credentials invariant.
 """
 
-import pytest
-
 
 def test_cors_wildcard_does_not_allow_credentials(mock_gcp):
     from starlette.middleware.cors import CORSMiddleware
