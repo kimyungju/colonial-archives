@@ -42,7 +42,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # Must remain False whenever allow_origins contains "*".
+    # Browsers reject the wildcard+credentials combo. Same-origin fetches
+    # from the React frontend don't send credentials, so this is safe.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
