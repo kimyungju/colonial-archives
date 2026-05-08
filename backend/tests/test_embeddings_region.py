@@ -19,20 +19,28 @@ def fresh_service():
 
 def test_model_property_calls_vertexai_init_with_gcp_region(fresh_service):
     """EmbeddingsService.model must call vertexai.init(location=GCP_REGION)
-    before constructing the model, so prior init calls cannot leak the
+    BEFORE constructing the model, so prior init calls cannot leak the
     wrong region into TextEmbeddingModel.from_pretrained."""
     with (
         patch("app.services.embeddings.vertexai") as mock_vertexai,
         patch("app.services.embeddings.TextEmbeddingModel") as mock_model_cls,
     ):
-        mock_model_cls.from_pretrained.return_value = MagicMock()
-
-        # Simulate LlmService having already pinned global state to us-central1
-        mock_vertexai.init.reset_mock()
+        call_order: list[str] = []
+        mock_vertexai.init.side_effect = lambda **_kw: call_order.append("init")
+        mock_model_cls.from_pretrained.side_effect = lambda *_a, **_kw: (
+            call_order.append("from_pretrained") or MagicMock()
+        )
 
         _ = fresh_service.model
 
-        # vertexai.init must have been called, with location=GCP_REGION
+        # Order matters: init must run BEFORE from_pretrained, otherwise
+        # from_pretrained captures whatever region the global state was
+        # left in by an earlier service.
+        assert call_order == ["init", "from_pretrained"], (
+            f"Expected init before from_pretrained, got {call_order}"
+        )
+
+        # And the kwargs to init must point at GCP_REGION (not VERTEX_LLM_REGION).
         from app.config.settings import settings
         mock_vertexai.init.assert_called_once()
         call_kwargs = mock_vertexai.init.call_args.kwargs
