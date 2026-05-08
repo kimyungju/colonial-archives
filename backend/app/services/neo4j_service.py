@@ -282,72 +282,186 @@ class Neo4jService:
     ) -> list[GraphNode]:
         """Search entities by name or alias.
 
-        Uses a two-step strategy:
-        1. Exact CONTAINS substring match (original behaviour).
-        2. If no results, fall back to word-split search — each word in the
-           query is matched individually, and results are ranked by the number
-           of matching words (more matches = higher rank).
+        Hot path is full-text only. Legacy CONTAINS runs ONLY as a
+        gated fallback when:
+          * the sanitiser yields no usable Lucene tokens, or
+          * the full-text call raises a missing/populating-index error
+            (deploy-window safety net for B1 not-yet-applied).
+
+        Any other full-text error propagates — those are real bugs and
+        masking them with a label-scan would just hide outages while
+        doubling Neo4j load. An earlier draft of this method ran legacy
+        in parallel for every query; that was rejected because
+        ``_graph_search`` already fans out one ``search_entities`` call
+        per entity hint (cap 6 from D1), so always-parallel meant up to
+        12 concurrent Neo4j queries per user question — half of them
+        the same label scan the migration was supposed to retire.
+        """
+        if not query_text or not query_text.strip():
+            return []
+
+        sanitised = self._sanitise_fulltext_query(query_text)
+        if not sanitised:
+            # No usable Lucene tokens (e.g. all reserved chars or all <2 chars).
+            return await self._search_entities_legacy(query_text, limit, categories)
+
+        try:
+            return await self._run_fulltext_query(sanitised, limit, categories)
+        except Exception as exc:
+            if self._is_missing_index_error(exc):
+                logger.warning(
+                    "Fulltext index 'entity_name_fulltext' unavailable "
+                    "(%s); falling back to legacy CONTAINS scan. "
+                    "Run scripts/neo4j_migration.py to re-enable fast path.",
+                    exc,
+                )
+                return await self._search_entities_legacy(query_text, limit, categories)
+            # Unrecognised error — propagate rather than mask with a slow path.
+            raise
+
+    async def _run_fulltext_query(
+        self,
+        sanitised: str,
+        limit: int,
+        categories: list[str] | None,
+    ) -> list[GraphNode]:
+        """Run the full-text Cypher and return GraphNodes.
+
+        Pushes category filter into Cypher BEFORE ``LIMIT $limit`` so
+        small-limit callers don't get starved by high-scored out-of-
+        category hits.
+        """
+        cypher = """
+        CALL db.index.fulltext.queryNodes('entity_name_fulltext', $search_term)
+        YIELD node, score
+        WHERE size($categories) = 0
+           OR any(c IN coalesce(node.main_categories, [])
+                  WHERE c IN $categories)
+        RETURN node AS e, score
+        ORDER BY score DESC
+        LIMIT $limit
+        """
+        params = {
+            "search_term": sanitised,
+            "limit": limit,
+            "categories": categories or [],
+        }
+
+        async with self.driver.session() as session:
+            result = await session.run(cypher, params)
+            records = [r async for r in result]
+
+        return [
+            self._record_to_graph_node(rec["e"], highlighted=False)
+            for rec in records
+        ]
+
+    @staticmethod
+    def _is_missing_index_error(exc: Exception) -> bool:
+        """Identify the Neo4j error raised when a full-text index does not
+        exist or is still in the POPULATING state.
+
+        Matches Neo4jError messages by substring rather than by code so the
+        guard works across driver versions and minor wording changes.
+
+        We normalise the message before matching:
+          * lowercase (Neo4j sometimes capitalises ``IndexNotFound``)
+          * strip hyphens (Neo4j docs say "full-text" but the runtime error
+            string says "fulltext"; either may surface in future versions)
+          * collapse whitespace (multi-line errors)
+        """
+        raw = str(exc).lower().replace("-", "")
+        msg = " ".join(raw.split())
+        return any(
+            needle in msg
+            for needle in (
+                "no such fulltext schema index",
+                "no such fulltext index",
+                "no such index",
+                "indexnotfound",
+                "fulltext index ... is not online",
+                "populat",
+            )
+        )
+
+    async def _search_entities_legacy(
+        self,
+        query_text: str,
+        limit: int,
+        categories: list[str] | None,
+    ) -> list[GraphNode]:
+        """Pre-fulltext-index entity search. Kept as a fallback path for
+        deploys where ``scripts/neo4j_migration.py`` has not run yet or
+        the index is still being built. Slower than the full-text path
+        (label scan over Entity.name and aliases) but functionally
+        equivalent for the common case.
+
+        Category filtering happens INSIDE the Cypher WHERE clause, BEFORE
+        ``LIMIT``. Filtering in Python after ``LIMIT`` (which the original
+        pre-plan implementation did) can starve small-limit callers when
+        higher-confidence out-of-category rows occupy the top-N. The
+        full-text path applies the same in-Cypher filter for parity.
         """
         search_term = query_text.lower()
 
-        # --- Step 1: exact CONTAINS (original approach) ---
-        exact_cypher = """
+        cypher = """
         MATCH (e:Entity)
-        WHERE toLower(e.name) CONTAINS $search_term
-           OR any(alias IN coalesce(e.aliases, [])
-                  WHERE toLower(alias) CONTAINS $search_term)
+        WHERE (toLower(e.name) CONTAINS $search_term
+               OR any(alias IN coalesce(e.aliases, [])
+                      WHERE toLower(alias) CONTAINS $search_term))
+          AND (size($categories) = 0
+               OR any(c IN coalesce(e.main_categories, [])
+                      WHERE c IN $categories))
         RETURN e
         ORDER BY e.evidence_confidence DESC
         LIMIT $limit
         """
-        exact_params = {"search_term": search_term, "limit": limit}
-
+        params = {
+            "search_term": search_term,
+            "limit": limit,
+            "categories": categories or [],
+        }
         async with self.driver.session() as session:
-            result = await session.run(exact_cypher, exact_params)
+            result = await session.run(cypher, params)
             records = [r async for r in result]
 
-        method = "exact"
+        return [self._record_to_graph_node(rec["e"], highlighted=False) for rec in records]
 
-        # --- Step 2: word-split fallback ---
-        if not records:
-            words = [w for w in search_term.split() if len(w) >= 2]
-            if words:
-                word_cypher = """
-                MATCH (e:Entity)
-                WHERE any(word IN $words WHERE toLower(e.name) CONTAINS word)
-                   OR any(word IN $words WHERE any(alias IN coalesce(e.aliases, [])
-                          WHERE toLower(alias) CONTAINS word))
-                WITH e,
-                     size([word IN $words WHERE toLower(e.name) CONTAINS word]) AS name_matches,
-                     size([word IN $words WHERE any(alias IN coalesce(e.aliases, [])
-                           WHERE toLower(alias) CONTAINS word)]) AS alias_matches
-                WITH e, name_matches + alias_matches AS match_count
-                ORDER BY match_count DESC, e.evidence_confidence DESC
-                LIMIT $limit
-                RETURN e
-                """
-                word_params = {"words": words, "limit": limit}
+    # Lucene reserved characters that must be escaped or stripped before
+    # being passed to db.index.fulltext.queryNodes.
+    _LUCENE_RESERVED = set('+-&|!(){}[]^"~*?:\\/')
 
-                async with self.driver.session() as session:
-                    result = await session.run(word_cypher, word_params)
-                    records = [r async for r in result]
+    @staticmethod
+    def _sanitise_fulltext_query(text: str) -> str:
+        """Strip Lucene specials, lowercase tokens, drop short ones,
+        OR-combine the rest with prefix-wildcard and fuzzy operators.
 
-                method = "word_split"
+        Lowercasing is critical: Lucene treats ``AND``/``OR``/``NOT``/``TO``
+        as case-sensitive operator keywords. A user typing "AND" or
+        "Singapore AND Penang" would otherwise inject those tokens as
+        operators or trigger a parse error. Lowercasing turns them into
+        ordinary terms that match the analyzer-lowercased index content.
 
-        nodes: list[GraphNode] = []
-        for rec in records:
-            node = self._record_to_graph_node(rec["e"], highlighted=False)
-            if categories and not any(c in node.main_categories for c in categories):
-                continue
-            nodes.append(node)
+        Tokens are joined by whitespace, which Lucene treats as the default
+        OR operator. We deliberately avoid emitting an explicit ``OR``
+        separator so the sanitised string never contains the uppercase
+        operator keyword — that keeps a user-supplied ``"OR"`` from being
+        confused with our join token in tests and logs.
 
-        logger.debug(
-            "Entity search for '%s': %d results (method=%s)",
-            query_text,
-            len(nodes),
-            method,
+        Example::
+
+            "Raffles opium" -> "raffles* raffles~1 opium* opium~1"
+            "AND OR NOT"    -> "and* and~1 or* or~1 not* not~1"
+        """
+        if not text:
+            return ""
+        cleaned = "".join(
+            c if c not in Neo4jService._LUCENE_RESERVED else " " for c in text
         )
-        return nodes
+        tokens = [t.lower() for t in cleaned.split() if len(t) >= 2]
+        if not tokens:
+            return ""
+        return " ".join(f"{t}* {t}~1" for t in tokens)
 
     async def get_all_entity_names(self) -> list[dict]:
         """Return all entity canonical_ids, names, and aliases for normalization."""
