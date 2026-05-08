@@ -185,6 +185,9 @@ class Neo4jService:
         the pre-plan implementation. The undirected widening (which is
         a real recall bug fix) is handled separately in Task B3b so the
         round-trip optimisation can be deployed and observed on its own.
+        Category filtering is applied in Python after the fetch; Task B3b
+        will push it into Cypher together with the directionality and
+        size-cap changes.
         """
         if depth is None:
             depth = settings.GRAPH_HOP_DEPTH
@@ -195,8 +198,6 @@ class Neo4jService:
         WITH center,
              collect(DISTINCT neighbor) AS neighbors,
              collect(DISTINCT r) AS rel_lists
-        WITH center, neighbors,
-             [rel_list IN rel_lists | rel_list] AS rel_lists
         RETURN center, neighbors, rel_lists
         """
         params = {"canonical_id": canonical_id}
