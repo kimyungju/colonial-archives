@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+import vertexai
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
 from app.config.settings import settings
@@ -25,9 +26,19 @@ class EmbeddingsService:
     @property
     def model(self):
         if self._model is None:
+            # Other services (LlmService, vector_search) call vertexai.init
+            # with different regions. TextEmbeddingModel.from_pretrained pins
+            # the constructed model to whatever region is global at call time,
+            # so we must re-pin to GCP_REGION right before construction.
+            vertexai.init(
+                project=settings.GCP_PROJECT_ID,
+                location=settings.GCP_REGION,
+            )
             self._model = TextEmbeddingModel.from_pretrained(settings.VERTEX_EMBED_MODEL)
             logger.info(
-                "EmbeddingsService initialised with model=%s", settings.VERTEX_EMBED_MODEL
+                "EmbeddingsService initialised with model=%s in %s",
+                settings.VERTEX_EMBED_MODEL,
+                settings.GCP_REGION,
             )
         return self._model
 
