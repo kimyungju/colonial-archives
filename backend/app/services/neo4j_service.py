@@ -379,7 +379,6 @@ class Neo4jService:
                 "no such fulltext index",
                 "no such index",
                 "indexnotfound",
-                "fulltext index ... is not online",
                 "populat",
             )
         )
