@@ -88,8 +88,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       set({
         messages: [...get().messages, assistantMsg],
-        graphData: response.graph ?? null,
-        isOverviewMode: false,
+        graphData: response.source_type === "web_fallback" ? null : (response.graph ?? null),
+        isOverviewMode: response.source_type === "web_fallback" || !response.graph,
         isQuerying: false,
       });
     } catch (err) {

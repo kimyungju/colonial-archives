@@ -203,8 +203,8 @@ class HybridRetrievalService:
                     )
                 )
 
-        # Step 10 — Build graph payload.
-        graph_payload = graph_result.get("payload")
+        # Step 10 — Build graph payload (archive answers only; web fallback has no archive graph).
+        graph_payload = graph_result.get("payload") if source_type != "web_fallback" else None
 
         return QueryResponse(
             answer=answer_text,
