@@ -1,0 +1,33 @@
+name: Neo4j Keep-Alive
+
+on:
+  schedule:
+    - cron: "0 0 */2 * *"  # every 2 days at midnight UTC
+  workflow_dispatch:        # manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Neo4j
+        run: |
+          pip install neo4j --quiet
+          python - <<'EOF'
+          from neo4j import GraphDatabase
+          import os, sys
+
+          uri = os.environ["NEO4J_URI"]
+          user = os.environ["NEO4J_USER"]
+          password = os.environ["NEO4J_PASSWORD"]
+
+          driver = GraphDatabase.driver(uri, auth=(user, password))
+          with driver.session() as session:
+              result = session.run("MATCH (n) RETURN count(n) AS count")
+              count = result.single()["count"]
+              print(f"Neo4j alive — {count} nodes")
+          driver.close()
+          EOF
+        env:
+          NEO4J_URI: ${{ secrets.NEO4J_URI }}
+          NEO4J_USER: ${{ secrets.NEO4J_USER }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
