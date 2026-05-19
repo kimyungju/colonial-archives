@@ -129,7 +129,14 @@ export default function GraphCanvas() {
   const elements = useMemo(() => {
     if (!activeData) return [];
 
-    const nodeEls = activeData.nodes
+    // Cap overview to top N most-connected nodes; backend returns them sorted DESC.
+    // Reduces fcose layout compute from O(n²) on 1959 nodes to a manageable set.
+    const MAX_OVERVIEW_NODES = 800;
+    const visibleNodes = isOverviewMode
+      ? activeData.nodes.slice(0, MAX_OVERVIEW_NODES)
+      : activeData.nodes;
+
+    const nodeEls = visibleNodes
       .filter(
         (n) =>
           // Hide disconnected nodes in overview (they pack into an ugly grid)
@@ -184,10 +191,10 @@ export default function GraphCanvas() {
     const layoutOptions = useOverviewLayout
       ? {
           name: "fcose",
-          quality: "proof" as const,
+          quality: "default" as const,
           randomize: true,
           animate: true,
-          animationDuration: 1200,
+          animationDuration: 800,
           fit: true,
           padding: 80,
           nodeSeparation: 250,
@@ -196,7 +203,7 @@ export default function GraphCanvas() {
           gravity: 0.08,
           gravityRange: 8.0,
           edgeElasticity: 0.1,
-          numIter: 5000,
+          numIter: 2000,
           idealEdgeLength: ((edge: cytoscape.EdgeSingular) => {
             const src = edge.source().data("main_categories");
             const tgt = edge.target().data("main_categories");

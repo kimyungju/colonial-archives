@@ -6,6 +6,7 @@ backed by Neo4j.
 
 from __future__ import annotations
 
+import logging
 import time
 
 from fastapi import APIRouter, HTTPException, Query
@@ -18,6 +19,18 @@ router = APIRouter(prefix="/graph", tags=["graph"])
 # In-memory cache for overview graph (changes infrequently)
 _overview_cache: dict[str, tuple[float, GraphOverviewPayload]] = {}
 _CACHE_TTL_SECONDS = 300  # 5 minutes
+
+logger = logging.getLogger(__name__)
+
+
+async def prewarm_overview_cache() -> None:
+    """Populate the overview cache at startup so the first browser request is instant."""
+    try:
+        payload = await neo4j_service.get_overview_graph()
+        _overview_cache["overview"] = (time.time(), payload)
+        logger.info("Overview cache pre-warmed: %d nodes, %d edges", len(payload.nodes), len(payload.edges))
+    except Exception:
+        logger.warning("Overview cache pre-warm failed", exc_info=True)
 
 
 @router.get("/overview", response_model=GraphOverviewPayload)

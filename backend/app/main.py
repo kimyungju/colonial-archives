@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -10,6 +11,7 @@ from app.config.settings import settings
 from app.middleware.trace import TraceMiddleware
 from app.routers import graph, ingest, query
 from app.routers.admin import router as admin_router
+from app.routers.graph import prewarm_overview_cache
 from app.services.neo4j_service import neo4j_service
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,7 @@ async def lifespan(app: FastAPI):
     neo4j_ok = await neo4j_service.verify_connectivity()
     if neo4j_ok:
         logger.info("Neo4j connection verified")
+        asyncio.create_task(prewarm_overview_cache())
     else:
         logger.warning("Neo4j not reachable — graph features will fail")
     yield

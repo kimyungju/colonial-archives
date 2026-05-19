@@ -500,63 +500,68 @@ class Neo4jService:
         """Return all entities and relationships for the overview visualization.
 
         Each node includes a connection_count (number of relationships) so the
-        frontend can size nodes proportionally.
+        frontend can size nodes proportionally. Node and edge queries run in
+        parallel to halve the round-trip overhead.
         """
-        nodes: list[OverviewNode] = []
-        edges: list[GraphEdge] = []
+        import asyncio
 
-        async with self.driver.session() as session:
-            # Fetch all entities with their connection counts
-            node_result = await session.run(
-                """
-                MATCH (e:Entity)
-                OPTIONAL MATCH (e)-[r:RELATED_TO]-()
-                WITH e, count(r) AS connection_count
-                RETURN e.canonical_id AS canonical_id,
-                       e.name AS name,
-                       coalesce(e.main_categories, []) AS main_categories,
-                       e.sub_category AS sub_category,
-                       connection_count,
-                       e.evidence_doc_id AS evidence_doc_id,
-                       e.evidence_page AS evidence_page
-                ORDER BY connection_count DESC
-                """
-            )
-            async for record in node_result:
-                nodes.append(
+        async def _fetch_nodes() -> list[OverviewNode]:
+            async with self.driver.session() as session:
+                result = await session.run(
+                    """
+                    MATCH (e:Entity)
+                    OPTIONAL MATCH (e)-[r:RELATED_TO]-()
+                    WITH e, count(r) AS connection_count
+                    RETURN e.canonical_id AS canonical_id,
+                           e.name AS name,
+                           coalesce(e.main_categories, []) AS main_categories,
+                           e.sub_category AS sub_category,
+                           connection_count,
+                           e.evidence_doc_id AS evidence_doc_id,
+                           e.evidence_page AS evidence_page
+                    ORDER BY connection_count DESC
+                    """
+                )
+                return [
                     OverviewNode(
-                        canonical_id=record["canonical_id"],
-                        name=record["name"],
-                        main_categories=list(record["main_categories"]),
-                        sub_category=record.get("sub_category"),
-                        connection_count=record["connection_count"],
-                        evidence_doc_id=record.get("evidence_doc_id"),
-                        evidence_page=record.get("evidence_page"),
+                        canonical_id=rec["canonical_id"],
+                        name=rec["name"],
+                        main_categories=list(rec["main_categories"]),
+                        sub_category=rec.get("sub_category"),
+                        connection_count=rec["connection_count"],
+                        evidence_doc_id=rec.get("evidence_doc_id"),
+                        evidence_page=rec.get("evidence_page"),
                     )
-                )
+                    async for rec in result
+                ]
 
-            # Fetch all relationships
-            edge_result = await session.run(
-                """
-                MATCH (a:Entity)-[r:RELATED_TO]->(b:Entity)
-                RETURN a.canonical_id AS source_id,
-                       b.canonical_id AS target_id,
-                       r.rel_type AS rel_type
-                """
-            )
-            edge_idx = 0
-            async for record in edge_result:
-                edges.append(
-                    GraphEdge(
-                        id=f"overview_edge_{edge_idx}",
-                        source=record["source_id"],
-                        target=record["target_id"],
-                        type=record["rel_type"] or "RELATED_TO",
-                        attributes={},
-                        highlighted=False,
-                    )
+        async def _fetch_edges() -> list[GraphEdge]:
+            async with self.driver.session() as session:
+                result = await session.run(
+                    """
+                    MATCH (a:Entity)-[r:RELATED_TO]->(b:Entity)
+                    RETURN a.canonical_id AS source_id,
+                           b.canonical_id AS target_id,
+                           r.rel_type AS rel_type
+                    """
                 )
-                edge_idx += 1
+                edges = []
+                idx = 0
+                async for rec in result:
+                    edges.append(
+                        GraphEdge(
+                            id=f"overview_edge_{idx}",
+                            source=rec["source_id"],
+                            target=rec["target_id"],
+                            type=rec["rel_type"] or "RELATED_TO",
+                            attributes={},
+                            highlighted=False,
+                        )
+                    )
+                    idx += 1
+                return edges
+
+        nodes, edges = await asyncio.gather(_fetch_nodes(), _fetch_edges())
 
         logger.info(
             "Overview graph: %d nodes, %d edges", len(nodes), len(edges)
