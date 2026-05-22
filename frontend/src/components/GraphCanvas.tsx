@@ -27,7 +27,7 @@ function nodeSize(connectionCount: number, isOverview: boolean): number {
 
 function labelThreshold(nodes: OverviewNode[], isOverview: boolean): number {
   if (nodes.length === 0) return 0;
-  const percentile = isOverview ? 0.6 : 0.4;
+  const percentile = isOverview ? 0.82 : 0.4;
   const sorted = [...nodes]
     .map((n) => n.connection_count)
     .sort((a, b) => a - b);
@@ -131,7 +131,7 @@ export default function GraphCanvas() {
 
     // Cap overview to top N most-connected nodes; backend returns them sorted DESC.
     // Reduces fcose layout compute from O(n²) on 1959 nodes to a manageable set.
-    const MAX_OVERVIEW_NODES = 800;
+    const MAX_OVERVIEW_NODES = 350;
     const visibleNodes = isOverviewMode
       ? activeData.nodes.slice(0, MAX_OVERVIEW_NODES)
       : activeData.nodes;
@@ -139,8 +139,8 @@ export default function GraphCanvas() {
     const nodeEls = visibleNodes
       .filter(
         (n) =>
-          // Hide disconnected nodes in overview (they pack into an ugly grid)
-          (!isOverviewMode || n.connection_count > 0) &&
+          // In overview, hide low-degree nodes (they cause dense clumping)
+          (!isOverviewMode || n.connection_count > 1) &&
           (!n.main_categories.length ||
             !n.main_categories.every((c) => hiddenCategories.has(c))),
       )
@@ -196,24 +196,24 @@ export default function GraphCanvas() {
           animate: true,
           animationDuration: 800,
           fit: true,
-          padding: 80,
-          nodeSeparation: 250,
+          padding: 100,
+          nodeSeparation: 450,
           tile: true,
           packComponents: true,
           gravity: 0.08,
           gravityRange: 8.0,
-          edgeElasticity: 0.1,
-          numIter: 2000,
+          edgeElasticity: 0.08,
+          numIter: 2500,
           idealEdgeLength: ((edge: cytoscape.EdgeSingular) => {
             const src = edge.source().data("main_categories");
             const tgt = edge.target().data("main_categories");
-            return src === tgt ? 180 : 450;
+            return src === tgt ? 250 : 520;
           }) as unknown as number,
           nodeRepulsion: ((node: cytoscape.NodeSingular) => {
             const cc = node.data("connection_count") as number;
-            if (cc > 10) return 80000;
-            if (cc > 3) return 40000;
-            return 20000;
+            if (cc > 10) return 180000;
+            if (cc > 3) return 90000;
+            return 45000;
           }) as unknown as number,
         }
       : {
