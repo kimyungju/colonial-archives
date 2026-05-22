@@ -136,39 +136,53 @@ export default function GraphCanvas() {
       ? activeData.nodes.slice(0, MAX_OVERVIEW_NODES)
       : activeData.nodes;
 
-    const nodeEls = visibleNodes
-      .filter(
-        (n) =>
-          // In overview, hide low-degree nodes (they cause dense clumping)
-          (!isOverviewMode || n.connection_count > 1) &&
-          (!n.main_categories.length ||
-            !n.main_categories.every((c) => hiddenCategories.has(c))),
-      )
-      .map((n) => ({
-        data: {
-          id: n.canonical_id,
-          label: n.name,
-          main_categories: n.main_categories[0] ?? "",
-          sub_category: n.sub_category ?? "",
-          connection_count: n.connection_count,
-          size: nodeSize(n.connection_count, isOverviewMode || isLargeNodeSet),
-          evidence_doc_id: n.evidence_doc_id ?? null,
-          evidence_page: n.evidence_page ?? null,
-        },
-      }));
+    const candidateNodes = visibleNodes.filter(
+      (n) =>
+        (!isOverviewMode || n.connection_count > 1) &&
+        (!n.main_categories.length ||
+          !n.main_categories.every((c) => hiddenCategories.has(c))),
+    );
 
-    const visibleIds = new Set(nodeEls.map((n) => n.data.id));
+    const candidateIds = new Set(candidateNodes.map((n) => n.canonical_id));
 
-    const edgeEls = activeData.edges
-      .filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target))
-      .map((e) => ({
-        data: {
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          type: e.type,
-        },
-      }));
+    // Filter edges first — both endpoints must be in candidate set
+    const filteredEdges = activeData.edges.filter(
+      (e) => candidateIds.has(e.source) && candidateIds.has(e.target),
+    );
+
+    // In overview, drop orphan nodes (no edges in the visible subset) — they
+    // drift to canvas edges and skew the bounding box used by fit()
+    const connectedIds = new Set<string>();
+    for (const e of filteredEdges) {
+      connectedIds.add(e.source);
+      connectedIds.add(e.target);
+    }
+
+    const finalNodes = isOverviewMode
+      ? candidateNodes.filter((n) => connectedIds.has(n.canonical_id))
+      : candidateNodes;
+
+    const nodeEls = finalNodes.map((n) => ({
+      data: {
+        id: n.canonical_id,
+        label: n.name,
+        main_categories: n.main_categories[0] ?? "",
+        sub_category: n.sub_category ?? "",
+        connection_count: n.connection_count,
+        size: nodeSize(n.connection_count, isOverviewMode || isLargeNodeSet),
+        evidence_doc_id: n.evidence_doc_id ?? null,
+        evidence_page: n.evidence_page ?? null,
+      },
+    }));
+
+    const edgeEls = filteredEdges.map((e) => ({
+      data: {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: e.type,
+      },
+    }));
 
     return [...nodeEls, ...edgeEls];
   }, [activeData, hiddenCategories, isOverviewMode]);
@@ -195,13 +209,15 @@ export default function GraphCanvas() {
           randomize: true,
           animate: true,
           animationDuration: 800,
-          fit: true,
+          fit: false,
           padding: 100,
           nodeSeparation: 450,
           tile: true,
           packComponents: true,
-          gravity: 0.08,
-          gravityRange: 8.0,
+          gravity: 0.25,
+          gravityRange: 6.0,
+          gravityCompound: 1.0,
+          gravityRangeCompound: 1.5,
           edgeElasticity: 0.08,
           numIter: 2500,
           idealEdgeLength: ((edge: cytoscape.EdgeSingular) => {
@@ -222,7 +238,7 @@ export default function GraphCanvas() {
           randomize: true,
           animate: true,
           animationDuration: 600,
-          fit: true,
+          fit: false,
           padding: 40,
           nodeSeparation: 100,
           tile: true,
@@ -312,19 +328,32 @@ export default function GraphCanvas() {
         },
       ],
       layout: layoutOptions as cytoscape.LayoutOptions,
-      minZoom: 0.2,
+      minZoom: 0.05,
       maxZoom: 4,
       wheelSensitivity: 0.3,
     });
 
     // ---- Zoom-to-fit after layout completes ----
     cy.one("layoutstop", () => {
-      cy.animate({
-        fit: { eles: cy.elements(), padding: useOverviewLayout ? 60 : 30 },
-        duration: 400,
-        easing: "ease-in-out-cubic",
+      // Defer to next frame so the browser finishes any pending layout work,
+      // then re-read container dimensions and fit. This fixes off-center
+      // positioning when the container size changes after cytoscape init.
+      requestAnimationFrame(() => {
+        if (!cyRef.current) return;
+        cyRef.current.resize();
+        const padding = useOverviewLayout ? 80 : 30;
+        cyRef.current.fit(cyRef.current.elements(), padding);
+        cyRef.current.center(cyRef.current.elements());
       });
     });
+
+    // ---- Re-fit when container size changes (splitter drag, window resize) ----
+    const resizeObserver = new ResizeObserver(() => {
+      if (!cyRef.current) return;
+      cyRef.current.resize();
+      cyRef.current.fit(cyRef.current.elements(), useOverviewLayout ? 80 : 30);
+    });
+    resizeObserver.observe(containerRef.current);
 
     // ---- Events ----
     cy.on("tap", "node", (evt: EventObject) => {
@@ -377,6 +406,7 @@ export default function GraphCanvas() {
     cyRef.current = cy;
 
     return () => {
+      resizeObserver.disconnect();
       cy.destroy();
       cyRef.current = null;
     };
