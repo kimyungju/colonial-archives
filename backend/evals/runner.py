@@ -39,6 +39,7 @@ from pathlib import Path
 from app.services.hybrid_retrieval import hybrid_retrieval_service
 from evals import metrics
 from evals.judge import judge_faithfulness
+from evals.sources import full_texts_for_citations
 
 EVALS_DIR = Path(__file__).parent
 RESULTS_DIR = EVALS_DIR / "results"
@@ -90,8 +91,9 @@ async def run_question(task: dict, use_judge: bool) -> dict:
 
     faithfulness = None
     if use_judge and not out_of_corpus and not abstained and archive_cites:
-        spans = [c.text_span for c in archive_cites]
-        faithfulness = await judge_faithfulness(task["question"], answer, spans)
+        # Full chunk texts, not 300-char spans — see FINDINGS.md Gap 2.
+        source_texts = await full_texts_for_citations(archive_cites)
+        faithfulness = await judge_faithfulness(task["question"], answer, source_texts)
 
     # Per-task success criteria.
     if out_of_corpus:
