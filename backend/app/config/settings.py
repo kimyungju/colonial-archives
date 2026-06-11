@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     GRAPH_HOP_DEPTH: int = 3
     VECTOR_TOP_K: int = 10
 
+    # Cross-encoder reranker (Phase 5)
+    # Disabled by default; flip RERANKER_ENABLED for the reranked pipeline.
+    # GATE_THRESHOLD 0.0 disables the relevance gate until the offline
+    # threshold sweep (evals) picks a corpus-tuned value.
+    RERANKER_ENABLED: bool = False
+    RERANK_MODEL: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
+    RERANK_CANDIDATES: int = 30
+    RERANK_TOP_N: int = 5
+    RERANK_GATE_THRESHOLD: float = 0.0
+
     # Entity extraction (Phase 2)
     ENTITY_SIMILARITY_THRESHOLD: float = 0.85
     ENTITY_CONFIDENCE_MIN: float = 0.5

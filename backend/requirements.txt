@@ -12,3 +12,6 @@ neo4j==5.27.0
 pypdf==6.7.4
 rapidfuzz==3.10.1
 tavily-python==0.5.0
+# Cross-encoder reranker (PyTorch CPU inference; pulls torch from PyPI,
+# which is the CPU build on Windows/Linux-default — no CUDA needed)
+sentence-transformers==5.5.1
