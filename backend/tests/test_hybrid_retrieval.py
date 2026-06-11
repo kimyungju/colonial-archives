@@ -98,6 +98,35 @@ class TestLoadChunkContextsParallel:
         assert doc_b["text"] == ""
 
 
+class TestChunkContextOrdering:
+    """COSINE_DISTANCE index: lower distance = better match. Context chunks
+    (and therefore citations) must come back best-first, with confidence
+    expressed as similarity (1 - distance) so higher = better, consistent
+    with the graph chunks' hardcoded 0.8 confidence."""
+
+    @pytest.mark.asyncio
+    async def test_chunks_ordered_best_match_first(self, service, mock_storage):
+        vector_results = [
+            {"id": "doc_a_chunk_0", "distance": 0.5},
+            {"id": "doc_b_chunk_0", "distance": 0.2},
+            {"id": "doc_c_chunk_0", "distance": 0.35},
+        ]
+
+        contexts = await service._load_chunk_contexts(vector_results)
+
+        assert [c["id"] for c in contexts] == [
+            "doc_b_chunk_0", "doc_c_chunk_0", "doc_a_chunk_0",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_confidence_is_similarity_not_distance(self, service, mock_storage):
+        vector_results = [{"id": "doc_a_chunk_0", "distance": 0.2}]
+
+        contexts = await service._load_chunk_contexts(vector_results)
+
+        assert contexts[0]["confidence"] == pytest.approx(0.8)
+
+
 class TestGraphSearchParallel:
     """Verify _graph_search runs entity lookups concurrently."""
 

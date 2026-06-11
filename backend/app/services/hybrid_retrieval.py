@@ -635,6 +635,9 @@ class HybridRetrievalService:
                     chunk_lookup[cid] = chunk
 
         # --- Build context list ---
+        # The index uses COSINE_DISTANCE (lower = better). Expose confidence
+        # as similarity (1 - distance) so higher = better, consistent with
+        # the graph chunks' 0.8 and with vector_score in query() step 6.
         context_chunks: list[dict] = []
         for chunk_id, distance in distance_by_chunk.items():
             stored = chunk_lookup.get(chunk_id, {})
@@ -647,7 +650,7 @@ class HybridRetrievalService:
                     "text": stored.get("text", ""),
                     "doc_id": doc_id,
                     "pages": stored.get("pages", []),
-                    "confidence": distance,
+                    "confidence": max(1.0 - distance, 0.0),
                     "cite_type": "archive",
                 }
             )
