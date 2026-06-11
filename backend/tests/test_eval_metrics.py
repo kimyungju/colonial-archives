@@ -1,5 +1,7 @@
 """Offline unit tests for eval metric functions (no live services)."""
 
+import pytest
+
 from evals import metrics
 
 
@@ -59,6 +61,67 @@ class TestCitationGrounding:
 
     def test_none_when_no_markers(self):
         assert metrics.citation_grounding_rate([], 3, 0) is None
+
+
+class TestMRR:
+    def test_expected_doc_first_is_one(self):
+        assert metrics.mrr(["d1"], ["d1", "d2"]) == 1.0
+
+    def test_expected_doc_second_is_half(self):
+        assert metrics.mrr(["d2"], ["d1", "d2"]) == 0.5
+
+    def test_earliest_expected_doc_counts(self):
+        # d9 at rank 2 beats d1 at rank 4
+        assert metrics.mrr(["d1", "d9"], ["x", "d9", "y", "d1"]) == 0.5
+
+    def test_zero_when_no_expected_doc_cited(self):
+        assert metrics.mrr(["d1"], ["x", "y"]) == 0.0
+
+    def test_none_when_no_ground_truth(self):
+        assert metrics.mrr([], ["d1"]) is None
+
+
+class TestNDCGAtK:
+    def test_perfect_ranking_is_one(self):
+        assert metrics.ndcg_at_k(["d1", "d2"], ["d1", "d2", "x"], 5) == 1.0
+
+    def test_relevant_doc_at_rank_two(self):
+        # DCG = 1/log2(3), IDCG = 1/log2(2) = 1
+        import math
+        expected = (1 / math.log2(3))
+        assert metrics.ndcg_at_k(["d1"], ["x", "d1"], 5) == pytest.approx(expected)
+
+    def test_zero_when_nothing_relevant_in_top_k(self):
+        assert metrics.ndcg_at_k(["d1"], ["x", "y"], 5) == 0.0
+
+    def test_respects_k_cutoff(self):
+        # relevant doc at rank 6 is outside k=5
+        assert metrics.ndcg_at_k(["d1"], ["a", "b", "c", "d", "e", "d1"], 5) == 0.0
+
+    def test_ideal_capped_by_k(self):
+        # 3 expected docs but k=2: ideal DCG uses only 2 slots, so a
+        # ranking with the 2 best slots filled scores 1.0
+        assert metrics.ndcg_at_k(["d1", "d2", "d3"], ["d1", "d2"], 2) == 1.0
+
+    def test_none_when_no_ground_truth(self):
+        assert metrics.ndcg_at_k([], ["d1"], 5) is None
+
+
+class TestAggregateIncludesRankingMetrics:
+    def test_aggregate_reports_mean_mrr_and_ndcg(self):
+        from evals.runner import aggregate
+
+        results = [
+            {"id": "q1", "category": "economic", "success": True, "error": None,
+             "abstained": False, "latency_s": 1.0,
+             "recall_at_5": 1.0, "mrr": 1.0, "ndcg_at_5": 1.0},
+            {"id": "q2", "category": "economic", "success": True, "error": None,
+             "abstained": False, "latency_s": 1.0,
+             "recall_at_5": 0.5, "mrr": 0.5, "ndcg_at_5": 0.6},
+        ]
+        summary = aggregate(results)
+        assert summary["mean_mrr"] == 0.75
+        assert summary["mean_ndcg_at_5"] == 0.8
 
 
 class TestKeywordCoverage:

@@ -83,6 +83,8 @@ async def run_question(task: dict, use_judge: bool) -> dict:
     no_false_archive_grounding = (len(archive_cites) == 0 and resp.source_type != "archive")
 
     recall = metrics.recall_at_k(task.get("expected_doc_ids", []), cited_docs, K)
+    rr = metrics.mrr(task.get("expected_doc_ids", []), cited_docs)
+    ndcg = metrics.ndcg_at_k(task.get("expected_doc_ids", []), cited_docs, K)
     grounding = metrics.citation_grounding_rate(markers, len(archive_cites), len(web_cites))
     keyword_cov = metrics.expected_keywords_present(answer, task.get("expected_keywords", []))
 
@@ -121,6 +123,8 @@ async def run_question(task: dict, use_judge: bool) -> dict:
         "cited_docs": cited_docs,
         "expected_doc_ids": task.get("expected_doc_ids", []),
         "recall_at_5": recall,
+        "mrr": rr,
+        "ndcg_at_5": ndcg,
         "citation_grounding": grounding,
         "keyword_coverage": keyword_cov,
         "faithfulness": faithfulness,
@@ -158,6 +162,8 @@ def aggregate(results: list[dict]) -> dict:
             100 * sum(not r["abstained"] for r in in_domain) / len(in_domain), 1
         ) if in_domain else None,
         "mean_recall_at_5": _mean([r.get("recall_at_5") for r in in_domain]),
+        "mean_mrr": _mean([r.get("mrr") for r in in_domain]),
+        "mean_ndcg_at_5": _mean([r.get("ndcg_at_5") for r in in_domain]),
         "mean_citation_grounding": _mean([r.get("citation_grounding") for r in in_domain]),
         "mean_faithfulness": _mean([r.get("faithfulness") for r in in_domain]),
         "mean_keyword_coverage": _mean([r.get("keyword_coverage") for r in in_domain]),
@@ -179,12 +185,13 @@ def write_report(results, summary, out_dir: Path):
     for k, v in summary.items():
         lines.append(f"| {k} | {v} |")
     lines += ["", "## Per-question", "",
-              "| ID | Cat | Success | Recall@5 | Grounding | Faith | Latency | Note |",
-              "|---|---|---|---|---|---|---|---|"]
+              "| ID | Cat | Success | Recall@5 | MRR | nDCG@5 | Grounding | Faith | Latency | Note |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
     for r in results:
         mark = "PASS" if r.get("success") else "FAIL"
         lines.append(
             f"| {r['id']} | {r['category']} | {mark} | {r.get('recall_at_5')} | "
+            f"{r.get('mrr')} | {r.get('ndcg_at_5')} | "
             f"{r.get('citation_grounding')} | {r.get('faithfulness')} | "
             f"{r.get('latency_s')}s | {r.get('reason', r.get('error', ''))} |")
     (out_dir / "latest.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
