@@ -3,13 +3,15 @@
 Baseline run: 2026-06-11, 20 golden questions (8 out-of-corpus + 12 in-domain),
 `gemini-2.5-flash`, live Vertex Vector Search + Neo4j Aura + GCS.
 
-> **Status update (2026-06-11, Phase 0):** Gap 1 has an implemented fix
-> (cross-encoder relevance gate, behind `RERANKER_ENABLED`) pending a live
-> threshold sweep; Gap 2 is fixed (judge now sees full chunk texts); a third
-> bug found during review (citation ordering) is fixed. The baseline numbers
-> below predate all three changes — see "Phase 1 runbook" at the bottom for
-> the re-baseline procedure. The golden set has since grown to 30 questions
-> (18 OOC + 12 in-domain) and the harness now also reports MRR and nDCG@5.
+> **Status update (2026-06-11, Phase 1 complete):** all three gaps closed
+> and measured live on the expanded 30-question set. Final config
+> (`DISTANCE_GATE_THRESHOLD=0.4175`, reranker off): **overall 100%,
+> no-false-archive-grounding 100%, in-domain 100%, Recall@5 0.917, MRR
+> 0.808, nDCG@5 0.816, faithfulness 1.0, p50 20.6s**. The cross-encoder
+> rerank-score gate was falsified by the sweep and reranking itself hurt
+> ranking metrics on this corpus — see "Phase 1 results" below. Full runs:
+> `results/before.{json,md}`, `results/after_reranker.{json,md}`,
+> `results/after_final.{json,md}`.
 
 ## Headline numbers
 
@@ -59,11 +61,11 @@ cosine distance (smoke test: relevant chunk 0.988 vs off-topic 0.000), so
 the gate no longer collides with the in-domain 0.34–0.50 distance band.
 Everything is behind `RERANKER_ENABLED` (default off).
 
-**Remaining step (Phase 1):** redeploy the index once, run
-`evals/dump_candidates.py`, tune the threshold with `evals/sweep.py`
-(hard constraint: in-domain answer rate stays 100%), re-run the eval with
-the reranker on, then undeploy. Raise `no_false_archive_grounding_rate`
-floor to 100 in thresholds.json once measured.
+**Resolution (Phase 1, 2026-06-11):** the rerank-score gate was
+**falsified** by the live sweep and replaced with a min-vector-distance
+gate (`DISTANCE_GATE_THRESHOLD=0.4175`), which achieves
+no-false-archive-grounding 100% with in-domain answer rate 100%. See
+"Phase 1 results" below.
 
 ## Gap 2 — faithfulness is a conservative lower bound
 
@@ -97,22 +99,49 @@ on the old ordering — doc-level dedup masked much of the damage, but
 re-baseline before quoting before/after numbers. With the reranker enabled,
 citation confidence is the cross-encoder score instead.
 
-## Phase 1 runbook (single deploy window, then undeploy)
+## Phase 1 results (2026-06-11, single deploy window)
 
-All code and tests are offline-complete; only measurement needs the index.
+Three live runs on the 30-question set (18 OOC + 12 in-domain), all with
+the fixed judge and fixed citation ordering:
 
-1. Redeploy index (`evals/VECTOR_INDEX_OPS.md`, ~20–40 min) and sanity-check
-   with `python -m evals.discover`.
-2. **Before run:** `python -m evals.runner` with `RERANKER_ENABLED=false`
-   (new golden set + fixed judge + fixed ordering = clean baseline).
-3. `python -m evals.dump_candidates` — captures the top-30 pool per question
-   so later experiments are offline.
-4. `python -m evals.sweep` — pick `RERANK_GATE_THRESHOLD` (keeps in-domain
-   at 100% by construction; reports ungateable OOC overlaps).
-5. **After run:** `python -m evals.runner` with `RERANKER_ENABLED=true` and
-   the swept threshold.
-6. Commit both result sets, update this file with the before/after table,
-   raise thresholds.json floors, **undeploy the index**.
+| Metric | Before (no gate, no rerank) | Rerank + distance gate | **Final: distance gate only** |
+|---|---|---|---|
+| Overall success | 93.3% | 96.7% | **100%** |
+| No-false-archive-grounding | 88.9% | 100% | **100%** |
+| In-domain answer rate | 100% | 100% | **100%** |
+| Recall@5 | 0.917 | 0.750 | **0.917** |
+| MRR | 0.808 | 0.778 | **0.808** |
+| nDCG@5 | 0.816 | 0.708 | **0.816** |
+| Faithfulness | 1.0 | 1.0 | **1.0** |
+| Latency p50 | 23.4s | 24.1s | **20.6s** |
+
+**Finding 1 — the rerank-score gate hypothesis was falsified.** In-domain
+max cross-encoder scores span 0.0002–0.98: specific factoid questions
+(opium, Governor) score 0.96+, but broad thematic questions ("what legal
+matters appear in the correspondence?") score ~0 against MS MARCO. Worse,
+entity-overlap adversarial OOC questions ("opium farm revenue in 2024")
+score up to 0.80. The distributions are fully interleaved — 14/18 OOC
+overlap the in-domain range (`results/sweep.json`).
+
+**Finding 2 — min vector distance separates instead.** In-domain min
+distances span 0.277–0.412; OOC 0.354–0.631, with 14/18 OOC (including
+both live failures: crypto 0.4236, MRT 0.4234) above every in-domain
+query. Threshold 0.4175 (gap midpoint) gates them; the 4 entity-overlap
+OOC below it are already handled by the LLM's own refusal + web fallback.
+**Caveat:** the gap is narrow (0.4117 vs 0.4234) — expand the golden set
+before trusting the margin further.
+
+**Finding 3 — reranking hurt ranking on this corpus.** The same MS MARCO
+scoring failure reorders the top-30 badly: Recall@5 0.917 → 0.750
+(indomain-10 lost its expected doc entirely). **The reranker therefore
+ships disabled** (`RERANKER_ENABLED=false`); making it useful requires
+fine-tuning the cross-encoder on archive-style (question, chunk) pairs —
+future work.
+
+**Production config:** `DISTANCE_GATE_THRESHOLD=0.4175`,
+`RERANKER_ENABLED=false`. OOC queries now skip the archive LLM call,
+which is also why p50 improved. thresholds.json floors raised to the
+final run (no-false-grounding gates at 100).
 
 ## What's solid
 

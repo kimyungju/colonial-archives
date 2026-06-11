@@ -2,19 +2,19 @@
   "summary": {
     "questions": 30,
     "errors": 0,
-    "overall_success_rate": 100.0,
+    "overall_success_rate": 96.7,
     "no_false_archive_grounding_rate": 100.0,
     "in_domain_answer_rate": 100.0,
-    "mean_recall_at_5": 0.917,
-    "mean_mrr": 0.808,
-    "mean_ndcg_at_5": 0.816,
+    "mean_recall_at_5": 0.75,
+    "mean_mrr": 0.778,
+    "mean_ndcg_at_5": 0.708,
     "mean_citation_grounding": 1.0,
     "mean_faithfulness": 1.0,
     "mean_keyword_coverage": 1.0,
     "out_of_corpus_questions": 18,
     "in_domain_questions": 12,
-    "latency_p50_s": 20.61,
-    "latency_p95_s": 32.77
+    "latency_p50_s": 24.11,
+    "latency_p95_s": 30.06
   },
   "results": [
     {
@@ -34,7 +34,7 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 12.25,
+      "latency_s": 27.38,
       "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nParis is the capital of France [web:1, web:2, web:3, web:4].",
       "error": null
     },
@@ -55,8 +55,8 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 10.81,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nElon Musk is the CEO of Tesla [web:4], [web:5]. He was allowed to remain CEO [web:2",
+      "latency_s": 29.7,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nElon Musk is the CEO of Tesla [web:2], [web:4]. He took over as chief executive off",
       "error": null
     },
     {
@@ -76,8 +76,8 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 23.73,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nA transformer neural network is a type of neural network model used in deep learnin",
+      "latency_s": 29.09,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nTransformer neural networks are neural network models used in deep learning that ra",
       "error": null
     },
     {
@@ -97,8 +97,8 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 25.31,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe 2008 financial crisis was triggered by a series of interconnected factors, prim",
+      "latency_s": 28.25,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe 2008 financial crisis, also known as the Great Recession, was caused by a combi",
       "error": null
     },
     {
@@ -118,8 +118,8 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 11.48,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided context describes elements of how Hainanese chicken rice is prepared b",
+      "latency_s": 15.25,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided web sources describe elements of how Hainanese chicken rice is prepare",
       "error": null
     },
     {
@@ -139,7 +139,7 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 19.2,
+      "latency_s": 29.84,
       "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided context does not state the population of Singapore in 2026. It mention",
       "error": null
     },
@@ -160,7 +160,7 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 28.69,
+      "latency_s": 11.09,
       "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nArgentina won the 2022 FIFA Men's World Cup [web:1].",
       "error": null
     },
@@ -181,7 +181,7 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 19.09,
+      "latency_s": 38.45,
       "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided web sources do not contain any information about a \"CO 273 archive\" or",
       "error": null
     },
@@ -202,8 +202,8 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 15.69,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided web sources do not contain any information about the \"CO 273 archive\" ",
+      "latency_s": 23.78,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided web sources do not contain any information about a \"CO 273 archive\" in",
       "error": null
     },
     {
@@ -223,8 +223,8 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 24.78,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided sources do not state that Stamford Raffles used artificial intelligenc",
+      "latency_s": 24.11,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nNo, the provided context does not state that Stamford Raffles used artificial intel",
       "error": null
     },
     {
@@ -244,7 +244,7 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 21.17,
+      "latency_s": 26.05,
       "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided context does not contain information about the opium farm's annual rev",
       "error": null
     },
@@ -261,11 +261,11 @@
       "recall_at_5": null,
       "mrr": null,
       "ndcg_at_5": null,
-      "citation_grounding": 1.0,
+      "citation_grounding": null,
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 20.05,
+      "latency_s": 16.53,
       "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided web sources do not contain information about how the Straits Settlemen",
       "error": null
     },
@@ -286,8 +286,8 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 21.61,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe archive records that the Mass Rapid Transit (MRT) system is a rail network that",
+      "latency_s": 21.97,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe archive records a programme documenting the first experience and inauguration o",
       "error": null
     },
     {
@@ -303,12 +303,12 @@
       "recall_at_5": null,
       "mrr": null,
       "ndcg_at_5": null,
-      "citation_grounding": null,
+      "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 11.94,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThis information is not available in the provided context. The governors mentioned ",
+      "latency_s": 16.17,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThis information is not available in the provided web sources. The governors mentio",
       "error": null
     },
     {
@@ -324,12 +324,12 @@
       "recall_at_5": null,
       "mrr": null,
       "ndcg_at_5": null,
-      "citation_grounding": null,
+      "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 14.97,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nAt sea level, the boiling point of water is 100°C (212°F) [web:1, web:2, web:3, web",
+      "latency_s": 12.91,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nAt sea level, the boiling point of water is 100°C (212°F) [web:1], [web:2], [web:3]",
       "error": null
     },
     {
@@ -349,7 +349,7 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 14.27,
+      "latency_s": 5.44,
       "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nI am sorry, but the provided web sources do not contain information about the plot ",
       "error": null
     },
@@ -370,8 +370,8 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 20.58,
-      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided context mentions a book titled \"A touch of tropical spice : from chili",
+      "latency_s": 24.69,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided context mentions a resource titled \"A touch of tropical spice : from c",
       "error": null
     },
     {
@@ -391,7 +391,7 @@
       "keyword_coverage": null,
       "faithfulness": null,
       "n_archive_citations": 0,
-      "latency_s": 8.28,
+      "latency_s": 16.86,
       "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nDonald Trump won the 2024 United States presidential election, defeating the Democr",
       "error": null
     },
@@ -416,9 +416,9 @@
       "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": null,
-      "n_archive_citations": 12,
-      "latency_s": 20.78,
-      "answer_preview": "According to the archive documents, the following commodities were traded in the Straits Settlements:\n\n*   Tin (including tin ore and tin product) [archive:1, 3, 10]\n*   Gambier [archive:1, 8]\n*   Pep",
+      "n_archive_citations": 7,
+      "latency_s": 10.8,
+      "answer_preview": "According to the archives, the commodities traded in the Straits Settlements included:\n*   Rubber [archive:1], [archive:2], [archive:4]\n*   Tin ore and tin [archive:1]\n*   Petroleum (including kerosen",
       "error": null
     },
     {
@@ -431,26 +431,23 @@
       "no_false_archive_grounding": null,
       "cited_docs": [
         "Trocki Opium",
-        "CO 273:579:1",
         "CO 273:550:8",
         "CO 273:579:2a",
-        "CO 273:579:2b",
-        "CO 273:550:14",
         ""
       ],
       "expected_doc_ids": [
         "CO 273:550:8",
         "CO 273:579:1"
       ],
-      "recall_at_5": 1.0,
+      "recall_at_5": 0.5,
       "mrr": 0.5,
-      "ndcg_at_5": 0.6934264036172708,
+      "ndcg_at_5": 0.38685280723454163,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": 1.0,
-      "n_archive_citations": 16,
-      "latency_s": 24.83,
-      "answer_preview": "The archives record various aspects of colonial revenue and financial accounts, including specific financial documents, detailed revenue and expenditure figures, and financial reports.\n\n**Types of Fin",
+      "n_archive_citations": 11,
+      "latency_s": 23.45,
+      "answer_preview": "The colonial archives record various types of financial and revenue documents, including Accounts General Series, Bengal Financial Consultations, India Financial Consultations, Separate Revenue Procee",
       "error": null
     },
     {
@@ -462,7 +459,8 @@
       "abstained": false,
       "no_false_archive_grounding": null,
       "cited_docs": [
-        "Trocki Opium"
+        "Trocki Opium",
+        ""
       ],
       "expected_doc_ids": [
         "Trocki Opium"
@@ -472,10 +470,10 @@
       "ndcg_at_5": 1.0,
       "citation_grounding": 1.0,
       "keyword_coverage": 1.0,
-      "faithfulness": 1.0,
-      "n_archive_citations": 10,
-      "latency_s": 37.34,
-      "answer_preview": "The opium farm was a system for raising revenue in Singapore, existing since the foundation of the British settlement [archive:6], and organized by Farquhar over Raffles's objections [archive:6]. It w",
+      "faithfulness": null,
+      "n_archive_citations": 9,
+      "latency_s": 25.41,
+      "answer_preview": "The opium farm was the monopoly for the retail sale of prepared opium, or chandu, to the population of Singapore [archive:1]. This concession was a very important part of the Singapore economy [archiv",
       "error": null
     },
     {
@@ -487,7 +485,8 @@
       "abstained": false,
       "no_false_archive_grounding": null,
       "cited_docs": [
-        "Huff Economic Growth"
+        "Huff Economic Growth",
+        "CO 273:579:1"
       ],
       "expected_doc_ids": [
         "Huff Economic Growth"
@@ -497,10 +496,10 @@
       "ndcg_at_5": 1.0,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
-      "faithfulness": 1.0,
-      "n_archive_citations": 10,
-      "latency_s": 24.67,
-      "answer_preview": "The tin industry in the Straits Settlements involved a complex trade and smelting process. In the late 19th century, the tin industry's advances bore a significantly enhanced rate over cash purchases,",
+      "faithfulness": null,
+      "n_archive_citations": 5,
+      "latency_s": 25.89,
+      "answer_preview": "The archives provide several details about the tin trade and tin mining:\n\n*   **Shipping and Trade Dynamics:**\n    *   Ocean-going firms had little incentive to invest in the transhipment of tin and t",
       "error": null
     },
     {
@@ -513,23 +512,23 @@
       "no_false_archive_grounding": null,
       "cited_docs": [
         "Huff Economic Growth",
-        "CO 273:579:1",
-        "CO 273:579:3",
         "Trocki Opium",
+        "CO 273:579:1",
+        "CO 273:579:2b",
         ""
       ],
       "expected_doc_ids": [
         "CO 273:579:1"
       ],
       "recall_at_5": 1.0,
-      "mrr": 0.5,
-      "ndcg_at_5": 0.6309297535714575,
+      "mrr": 0.3333333333333333,
+      "ndcg_at_5": 0.5,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": null,
-      "n_archive_citations": 14,
-      "latency_s": 18.77,
-      "answer_preview": "The Governor of the Straits Settlements held several key roles:\n*   The Colony was ruled by the British colonial service, which the Governor headed [archive:1]. The seat of government was in Singapore",
+      "n_archive_citations": 9,
+      "latency_s": 18.03,
+      "answer_preview": "The Governor of the Straits Settlements held several key roles:\n\n*   **High Commissioner of the Federated Malay States (FMS)**: The Governor of the Straits Settlements also served as the High Commissi",
       "error": null
     },
     {
@@ -541,9 +540,8 @@
       "abstained": false,
       "no_false_archive_grounding": null,
       "cited_docs": [
-        "CO 273:534:11a",
-        "CO 273:579:4",
-        "CO 273:534:6"
+        "CO 273:534:6",
+        "CO 273:534:11a"
       ],
       "expected_doc_ids": [
         "CO 273:534:11a",
@@ -551,13 +549,13 @@
       ],
       "recall_at_5": 1.0,
       "mrr": 1.0,
-      "ndcg_at_5": 0.9197207891481876,
+      "ndcg_at_5": 1.0,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": 1.0,
-      "n_archive_citations": 10,
-      "latency_s": 30.25,
-      "answer_preview": "Correspondence concerns an \"open attempt... to land Chinese labourers at a port on the West coast\" and the possibility of \"Chinese immigrants being landed surreptitiously on the East coast of the Peni",
+      "n_archive_citations": 5,
+      "latency_s": 14.61,
+      "answer_preview": "The \"Man Kwok Yat Po\" published an anti-Tuan Chi Jui telegram purporting to come from a number of Labour Societies in Malaya, all of which were members of \"the Great Sworn League of the Kheng Ngai Rev",
       "error": null
     },
     {
@@ -569,11 +567,11 @@
       "abstained": false,
       "no_false_archive_grounding": null,
       "cited_docs": [
-        "CO 273:550:21",
-        "CO 273:534:11a",
-        "CO 273:550:3",
+        "CO 273:550:8",
+        "CO 273:534:13",
+        "CO 273:550:11",
         "CO 273:534:6",
-        "CO 273:534:9",
+        "CO 273:579:2b",
         ""
       ],
       "expected_doc_ids": [
@@ -585,10 +583,10 @@
       "ndcg_at_5": 0.6131471927654584,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
-      "faithfulness": 1.0,
-      "n_archive_citations": 17,
-      "latency_s": 49.83,
-      "answer_preview": "The archives record the following military or defence matters:\n*   Construction of the naval base at Singapore [archive:1].\n*   Construction work at the air base at Singapore [archive:1], [archive:2],",
+      "faithfulness": null,
+      "n_archive_citations": 12,
+      "latency_s": 18.02,
+      "answer_preview": "Military and defence matters recorded in the archive include:\n\n*   Discussions regarding \"defence\" and \"Imperial defence\", including a \"military Contribution\" of 20% to be paid towards Imperial defenc",
       "error": null
     },
     {
@@ -600,8 +598,7 @@
       "abstained": false,
       "no_false_archive_grounding": null,
       "cited_docs": [
-        "Huff Economic Growth",
-        ""
+        "Huff Economic Growth"
       ],
       "expected_doc_ids": [
         "Huff Economic Growth"
@@ -612,9 +609,9 @@
       "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": null,
-      "n_archive_citations": 15,
-      "latency_s": 19.2,
-      "answer_preview": "Singapore's trade and shipping with neighboring territories are extensively recorded:\n\n**Trade:**\n*   Singapore's prosperity was based on exchange trade with neighboring countries in general tropical ",
+      "n_archive_citations": 5,
+      "latency_s": 30.06,
+      "answer_preview": "Trade with neighbouring territories was primarily an \"exchange trade with neighbouring countries in general tropical produce\" [archive:1, archive:4]. This trade was considered a primary industry of th",
       "error": null
     },
     {
@@ -626,11 +623,11 @@
       "abstained": false,
       "no_false_archive_grounding": null,
       "cited_docs": [
+        "CO 273:534:11a",
+        "CO 273:550:19",
         "CO 273:550:21",
         "CO 273:534:2",
-        "CO 273:534:9",
         "CO 273:579:2a",
-        "CO 273:534:11a",
         ""
       ],
       "expected_doc_ids": [
@@ -638,42 +635,37 @@
         "CO 273:579:3"
       ],
       "recall_at_5": 0.5,
-      "mrr": 0.2,
-      "ndcg_at_5": 0.23719771276929622,
+      "mrr": 1.0,
+      "ndcg_at_5": 0.6131471927654584,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
-      "faithfulness": null,
-      "n_archive_citations": 15,
-      "latency_s": 15.19,
-      "answer_preview": "The correspondence discusses several administrative and establishment matters:\n\n*   **Legal Advice Arrangements**: The primary topic is the question of whether legal advice may be obtained by the Seni",
+      "faithfulness": 1.0,
+      "n_archive_citations": 10,
+      "latency_s": 25.38,
+      "answer_preview": "The correspondence discusses several administrative or establishment matters:\n*   The appointment of a member to the Immigration Committee for an enquiry [archive:1].\n*   The selection of two areas fo",
       "error": null
     },
     {
       "id": "indomain-10",
       "category": "economic",
-      "success": true,
-      "reason": "answered, grounded, faithful",
-      "source_type": "archive",
+      "success": false,
+      "reason": "abstained=False recall=0.0 grounding=1.0 faith=None",
+      "source_type": "web_fallback",
       "abstained": false,
       "no_false_archive_grounding": null,
-      "cited_docs": [
-        "CO 273:579:1",
-        "Trocki Opium",
-        "CO 273:550:14",
-        ""
-      ],
+      "cited_docs": [],
       "expected_doc_ids": [
         "CO 273:579:1"
       ],
-      "recall_at_5": 1.0,
-      "mrr": 1.0,
-      "ndcg_at_5": 1.0,
+      "recall_at_5": 0.0,
+      "mrr": 0.0,
+      "ndcg_at_5": 0.0,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": null,
-      "n_archive_citations": 13,
-      "latency_s": 20.61,
-      "answer_preview": "Agricultural production in the Straits Settlements included rubber, coconuts, and coffee, grown on large estates owned by European companies or jointly by Europeans and Asiatics, as well as on smaller",
+      "n_archive_citations": 0,
+      "latency_s": 52.83,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nCommercial agriculture was a significant economic activity in 19th and 20th-century",
       "error": null
     },
     {
@@ -685,24 +677,23 @@
       "abstained": false,
       "no_false_archive_grounding": null,
       "cited_docs": [
+        "CO 273:534:3",
         "CO 273:550:21",
-        "CO 273:534:9",
-        "CO 273:534:2",
-        "CO 273:550:11"
+        "CO 273:534:2"
       ],
       "expected_doc_ids": [
         "CO 273:534:9",
         "CO 273:550:21"
       ],
-      "recall_at_5": 1.0,
-      "mrr": 1.0,
-      "ndcg_at_5": 1.0,
+      "recall_at_5": 0.5,
+      "mrr": 0.5,
+      "ndcg_at_5": 0.38685280723454163,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
       "faithfulness": null,
-      "n_archive_citations": 10,
-      "latency_s": 30.34,
-      "answer_preview": "The correspondence mentions several legal and judicial matters:\n\n*   The question of whether legal advice may be obtained by the Senior Works and Buildings Officer in charge of construction work at th",
+      "n_archive_citations": 5,
+      "latency_s": 29.8,
+      "answer_preview": "The correspondence contains several legal and judicial matters:\n\n*   A \"Straits Settlements Deleterious Drugs Bill\" and a clause within it concerning the \"liabilities of Owners and Masters of Ships\" [",
       "error": null
     },
     {
@@ -714,23 +705,23 @@
       "abstained": false,
       "no_false_archive_grounding": null,
       "cited_docs": [
-        "CO 273:579:1",
         "CO 273:579:2b",
-        "CO 273:579:2a"
+        "CO 273:579:2a",
+        "CO 273:579:1"
       ],
       "expected_doc_ids": [
         "CO 273:579:2a",
         "CO 273:579:2b"
       ],
       "recall_at_5": 1.0,
-      "mrr": 0.5,
-      "ndcg_at_5": 0.6934264036172708,
+      "mrr": 1.0,
+      "ndcg_at_5": 1.0,
       "citation_grounding": 1.0,
       "keyword_coverage": null,
-      "faithfulness": 1.0,
-      "n_archive_citations": 10,
-      "latency_s": 32.77,
-      "answer_preview": "The archive documents mention the following infrastructure and public works:\n\n**General / Colony-wide:**\n*   Maintenance of Roads, Streets, Bridges and Canals [archive:2], [archive:3]\n*   Reconstructi",
+      "faithfulness": null,
+      "n_archive_citations": 5,
+      "latency_s": 22.12,
+      "answer_preview": "The archives mention the following infrastructure or public works:\n*   Public Works Department [archive:1], [archive:2]\n*   Public Works, Recurrent Expenditure [archive:1], [archive:2]\n*   Public Work",
       "error": null
     }
   ]

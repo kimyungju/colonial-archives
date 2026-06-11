@@ -1,0 +1,161 @@
+{
+  "summary": {
+    "threshold": 0.00016155477615976957,
+    "ooc_rejected_rate": 0.2222222222222222,
+    "overlapping_ooc": 14,
+    "in_domain_min": 0.00019224931777723903,
+    "ooc_max": 0.7958647873200891
+  },
+  "per_question": [
+    {
+      "id": "abstain-01",
+      "category": "abstention",
+      "max_score": 0.0006
+    },
+    {
+      "id": "abstain-02",
+      "category": "abstention",
+      "max_score": 0.001
+    },
+    {
+      "id": "abstain-03",
+      "category": "abstention",
+      "max_score": 0.0002
+    },
+    {
+      "id": "abstain-04",
+      "category": "abstention",
+      "max_score": 0.0003
+    },
+    {
+      "id": "abstain-05",
+      "category": "abstention",
+      "max_score": 0.0001
+    },
+    {
+      "id": "abstain-06",
+      "category": "abstention",
+      "max_score": 0.7718
+    },
+    {
+      "id": "abstain-07",
+      "category": "abstention",
+      "max_score": 0.0199
+    },
+    {
+      "id": "abstain-08",
+      "category": "abstention",
+      "max_score": 0.002
+    },
+    {
+      "id": "abstain-09",
+      "category": "abstention",
+      "max_score": 0.0873
+    },
+    {
+      "id": "abstain-10",
+      "category": "abstention",
+      "max_score": 0.2453
+    },
+    {
+      "id": "abstain-11",
+      "category": "abstention",
+      "max_score": 0.7959
+    },
+    {
+      "id": "abstain-12",
+      "category": "abstention",
+      "max_score": 0.5945
+    },
+    {
+      "id": "abstain-13",
+      "category": "abstention",
+      "max_score": 0.1075
+    },
+    {
+      "id": "abstain-14",
+      "category": "abstention",
+      "max_score": 0.3858
+    },
+    {
+      "id": "abstain-15",
+      "category": "abstention",
+      "max_score": 0.0001
+    },
+    {
+      "id": "abstain-16",
+      "category": "abstention",
+      "max_score": 0.0001
+    },
+    {
+      "id": "abstain-17",
+      "category": "abstention",
+      "max_score": 0.0
+    },
+    {
+      "id": "abstain-18",
+      "category": "abstention",
+      "max_score": 0.1989
+    },
+    {
+      "id": "indomain-01",
+      "category": "economic",
+      "max_score": 0.9713
+    },
+    {
+      "id": "indomain-02",
+      "category": "economic",
+      "max_score": 0.0967
+    },
+    {
+      "id": "indomain-03",
+      "category": "economic",
+      "max_score": 0.9754
+    },
+    {
+      "id": "indomain-04",
+      "category": "economic",
+      "max_score": 0.6092
+    },
+    {
+      "id": "indomain-05",
+      "category": "governance",
+      "max_score": 0.9644
+    },
+    {
+      "id": "indomain-06",
+      "category": "social",
+      "max_score": 0.0559
+    },
+    {
+      "id": "indomain-07",
+      "category": "defence",
+      "max_score": 0.0514
+    },
+    {
+      "id": "indomain-08",
+      "category": "economic",
+      "max_score": 0.0416
+    },
+    {
+      "id": "indomain-09",
+      "category": "governance",
+      "max_score": 0.0002
+    },
+    {
+      "id": "indomain-10",
+      "category": "economic",
+      "max_score": 0.01
+    },
+    {
+      "id": "indomain-11",
+      "category": "governance",
+      "max_score": 0.0002
+    },
+    {
+      "id": "indomain-12",
+      "category": "economic",
+      "max_score": 0.0048
+    }
+  ]
+}

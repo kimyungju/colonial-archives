@@ -1,18 +1,16 @@
 {
-  "description": "Regression gates for `python -m evals.runner --check`. Floors are set to the measured 2026-06-11 baseline ('do not regress'), NOT to the aspirational target. Phase 0 (reranker + gate, judge full-text fix, citation ordering fix) is merged but NOT yet re-baselined live - keep floors until the Phase 1 before/after runs land (see evals/FINDINGS.md 'Phase 1 runbook'), then raise no_false_archive_grounding_rate to 100 and mean_faithfulness toward 0.7.",
+  "description": "Regression gates for `python -m evals.runner --check`. Floors reflect the 2026-06-11 Phase 1 final run (30 questions, DISTANCE_GATE_THRESHOLD=0.4175, reranker off): overall 100%, no-false-grounding 100%, Recall@5 0.917, MRR 0.808, nDCG@5 0.816, faithfulness 1.0. no_false_archive_grounding_rate is the product guarantee and gates at 100; ranking/faithfulness floors leave headroom for question-set noise.",
   "min": {
-    "no_false_archive_grounding_rate": 85.0,
-    "in_domain_answer_rate": 90.0,
-    "mean_recall_at_5": 0.6,
+    "no_false_archive_grounding_rate": 100.0,
+    "in_domain_answer_rate": 100.0,
+    "mean_recall_at_5": 0.85,
+    "mean_mrr": 0.7,
+    "mean_ndcg_at_5": 0.7,
     "mean_citation_grounding": 0.9,
-    "mean_faithfulness": 0.35
+    "mean_faithfulness": 0.7
   },
   "max": {
     "errors": 1,
     "latency_p95_s": 60.0
-  },
-  "_targets_once_fixed": {
-    "no_false_archive_grounding_rate": 100.0,
-    "mean_faithfulness": 0.7
   }
 }
