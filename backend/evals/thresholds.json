@@ -1,5 +1,5 @@
 {
-  "description": "Regression gates for `python -m evals.runner --check`. Floors are set to the measured 2026-06-11 baseline ('do not regress'), NOT to the aspirational target. Two known gaps are tracked in evals/FINDINGS.md: (1) no_false_archive_grounding target is 100% but currently 87.5% because RELEVANCE_THRESHOLD is defined but unused in hybrid_retrieval; (2) mean_faithfulness is a conservative lower bound because the judge only sees 300-char citation spans, not full chunk text. Tighten these once fixed.",
+  "description": "Regression gates for `python -m evals.runner --check`. Floors are set to the measured 2026-06-11 baseline ('do not regress'), NOT to the aspirational target. Phase 0 (reranker + gate, judge full-text fix, citation ordering fix) is merged but NOT yet re-baselined live - keep floors until the Phase 1 before/after runs land (see evals/FINDINGS.md 'Phase 1 runbook'), then raise no_false_archive_grounding_rate to 100 and mean_faithfulness toward 0.7.",
   "min": {
     "no_false_archive_grounding_rate": 85.0,
     "in_domain_answer_rate": 90.0,

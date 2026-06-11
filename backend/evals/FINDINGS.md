@@ -3,6 +3,14 @@
 Baseline run: 2026-06-11, 20 golden questions (8 out-of-corpus + 12 in-domain),
 `gemini-2.5-flash`, live Vertex Vector Search + Neo4j Aura + GCS.
 
+> **Status update (2026-06-11, Phase 0):** Gap 1 has an implemented fix
+> (cross-encoder relevance gate, behind `RERANKER_ENABLED`) pending a live
+> threshold sweep; Gap 2 is fixed (judge now sees full chunk texts); a third
+> bug found during review (citation ordering) is fixed. The baseline numbers
+> below predate all three changes — see "Phase 1 runbook" at the bottom for
+> the re-baseline procedure. The golden set has since grown to 30 questions
+> (18 OOC + 12 in-domain) and the harness now also reports MRR and nDCG@5.
+
 ## Headline numbers
 
 | Metric | Result | Notes |
@@ -41,8 +49,21 @@ in-domain answers and tank the 100% in-domain answer rate. The fix is a
 in-domain vs out-of-corpus set, pick a separating threshold (likely ~0.55),
 and route below-threshold queries to web fallback instead of archive.
 
-**Next step:** threshold sweep over the golden set, then apply the gate in
-step 6/7 of `hybrid_retrieval.query()` and re-baseline.
+**Fix (implemented, Phase 0):** a PyTorch cross-encoder reranker
+(`app/services/reranker.py`, `cross-encoder/ms-marco-MiniLM-L6-v2`) now
+scores the top-30 vector candidates; the **max rerank score** is the
+relevance gate. Below `RERANK_GATE_THRESHOLD` the archive LLM is skipped
+and the query routes to the labelled web fallback (or abstains with zero
+citations if web fails). The cross-encoder separates far better than raw
+cosine distance (smoke test: relevant chunk 0.988 vs off-topic 0.000), so
+the gate no longer collides with the in-domain 0.34–0.50 distance band.
+Everything is behind `RERANKER_ENABLED` (default off).
+
+**Remaining step (Phase 1):** redeploy the index once, run
+`evals/dump_candidates.py`, tune the threshold with `evals/sweep.py`
+(hard constraint: in-domain answer rate stays 100%), re-run the eval with
+the reranker on, then undeploy. Raise `no_false_archive_grounding_rate`
+floor to 100 in thresholds.json once measured.
 
 ## Gap 2 — faithfulness is a conservative lower bound
 
@@ -55,9 +76,43 @@ step 6/7 of `hybrid_retrieval.query()` and re-baseline.
 cited chunk, so claims supported by the rest of the chunk look unsupported.
 The score is a genuine lower bound on grounding, not a true 0.41.
 
-**Next step:** have the runner fetch full chunk text from GCS by
-`doc_id`/`chunk_id` for the judge (more GCS reads), or widen `text_span`. Then
-re-baseline and raise the faithfulness floor toward the 0.7 target.
+**Fixed (Phase 0):** `evals/sources.py` recovers the full chunk text from
+GCS by prefix-matching the 300-char span against the doc's chunk file
+(citations carry `doc_id` but not `chunk_id`), falling back to the span for
+graph citations or on GCS failure. Re-baseline in Phase 1, then raise the
+faithfulness floor toward the 0.7 target.
+
+## Gap 3 — citations were ordered worst-first (found in Phase 0 review, fixed)
+
+**Symptom:** `_load_chunk_contexts` sorted context chunks by
+`confidence` (= raw distance) **descending**, but the index is
+`COSINE_DISTANCE` (verified via `gcloud ai indexes describe`): lower is
+better. The least-relevant chunk led every citation list, and
+`ArchiveCitation.confidence` carried a distance labelled as a confidence
+(inverted semantics vs the graph chunks' 0.8).
+
+**Fix:** confidence now stores similarity (`1 - distance`); the descending
+sort then yields best-first. Note the 0.917 Recall@5 baseline was measured
+on the old ordering — doc-level dedup masked much of the damage, but
+re-baseline before quoting before/after numbers. With the reranker enabled,
+citation confidence is the cross-encoder score instead.
+
+## Phase 1 runbook (single deploy window, then undeploy)
+
+All code and tests are offline-complete; only measurement needs the index.
+
+1. Redeploy index (`evals/VECTOR_INDEX_OPS.md`, ~20–40 min) and sanity-check
+   with `python -m evals.discover`.
+2. **Before run:** `python -m evals.runner` with `RERANKER_ENABLED=false`
+   (new golden set + fixed judge + fixed ordering = clean baseline).
+3. `python -m evals.dump_candidates` — captures the top-30 pool per question
+   so later experiments are offline.
+4. `python -m evals.sweep` — pick `RERANK_GATE_THRESHOLD` (keeps in-domain
+   at 100% by construction; reports ungateable OOC overlaps).
+5. **After run:** `python -m evals.runner` with `RERANKER_ENABLED=true` and
+   the swept threshold.
+6. Commit both result sets, update this file with the before/after table,
+   raise thresholds.json floors, **undeploy the index**.
 
 ## What's solid
 

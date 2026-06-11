@@ -149,6 +149,39 @@ The ingestion pipeline processes archive PDFs in 9 steps:
 
 Steps 7–9 (graph) are non-blocking — vector ingestion succeeds even if the graph pipeline fails.
 
+## Query Pipeline & Reranking
+
+Queries run hybrid retrieval (vector + graph in parallel), then an optional
+PyTorch cross-encoder reranking stage before answer generation:
+
+```
+question ──▶ embed ──▶ Vector Search top-30 ─┐
+        └──▶ entity hints ──▶ Neo4j subgraph ─┤
+                                              ▼
+                    cross-encoder rerank (vector chunks only)
+                    cross-encoder/ms-marco-MiniLM-L6-v2, CPU
+                                              │
+                 max score < gate threshold? ─┼─ yes ─▶ web fallback
+                                              ▼            (labelled, no
+                    top-5 chunks + graph context            archive citations)
+                                              ▼
+                    Gemini answer with [archive:N] citations
+```
+
+- **Reranker** (`backend/app/services/reranker.py`) — pretrained
+  cross-encoder via sentence-transformers, PyTorch CPU inference
+  (~0.16s for 30 pairs, negligible vs. the LLM calls), lazy-loaded,
+  behind `RERANKER_ENABLED` (default off).
+- **Relevance gate** — the max rerank score doubles as an out-of-corpus
+  detector: below `RERANK_GATE_THRESHOLD`, the archive LLM call is skipped
+  entirely and the query routes to the labelled web fallback. This closes
+  the fabricated-archive-grounding gap found by the eval harness
+  (`backend/evals/FINDINGS.md` Gap 1). The threshold is corpus-tuned
+  offline with `evals/sweep.py` against dumped candidates.
+- Note: torch CPU adds ~1.5 GB to the backend image; the model
+  (~90 MB) loads on first query. Keep `RERANKER_ENABLED=false` if cold
+  start matters more than retrieval precision.
+
 ## Getting Started
 
 ### Prerequisites
