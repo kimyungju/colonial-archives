@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     VECTOR_SEARCH_DEPLOYED_INDEX_ID: str = "PLACEHOLDER_DEPLOYED_INDEX_ID"
 
     # Vertex AI LLM
-    VERTEX_LLM_MODEL: str = "gemini-2.0-flash"
+    # gemini-2.0-flash was retired from Vertex; 2.5-flash is the current
+    # equivalent (low-latency, low-cost) available in us-central1.
+    VERTEX_LLM_MODEL: str = "gemini-2.5-flash"
     VERTEX_LLM_REGION: str = "us-central1"  # Gemini not available in all regions
 
     # Neo4j (Phase 2)

@@ -1,0 +1,487 @@
+{
+  "summary": {
+    "questions": 20,
+    "errors": 0,
+    "overall_success_rate": 90.0,
+    "no_false_archive_grounding_rate": 87.5,
+    "in_domain_answer_rate": 100.0,
+    "mean_recall_at_5": 0.917,
+    "mean_citation_grounding": 1.0,
+    "mean_faithfulness": 0.415,
+    "mean_keyword_coverage": 1.0,
+    "out_of_corpus_questions": 8,
+    "in_domain_questions": 12,
+    "latency_p50_s": 26.39,
+    "latency_p95_s": 33.11
+  },
+  "results": [
+    {
+      "id": "abstain-01",
+      "category": "abstention",
+      "success": false,
+      "reason": "presented archive grounding for out-of-corpus q (src=archive, archive_cites=10)",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": false,
+      "cited_docs": [
+        "CO 273:534:5",
+        "CO 273:550:19",
+        "CO 273:550:14",
+        "CO 273:579:4"
+      ],
+      "expected_doc_ids": [],
+      "recall_at_5": null,
+      "citation_grounding": null,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 10,
+      "latency_s": 20.67,
+      "answer_preview": "The capital of France is Paris [archive:2, archive:3, archive:5, archive:7, archive:8, archive:10].",
+      "error": null
+    },
+    {
+      "id": "abstain-02",
+      "category": "abstention",
+      "success": true,
+      "reason": "no fabricated archive grounding",
+      "source_type": "web_fallback",
+      "abstained": false,
+      "no_false_archive_grounding": true,
+      "cited_docs": [],
+      "expected_doc_ids": [],
+      "recall_at_5": null,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 0,
+      "latency_s": 20.08,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nElon Musk is the CEO of Tesla [web:4]. He took over as chief executive officer of T",
+      "error": null
+    },
+    {
+      "id": "abstain-03",
+      "category": "abstention",
+      "success": true,
+      "reason": "no fabricated archive grounding",
+      "source_type": "web_fallback",
+      "abstained": false,
+      "no_false_archive_grounding": true,
+      "cited_docs": [],
+      "expected_doc_ids": [],
+      "recall_at_5": null,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 0,
+      "latency_s": 29.16,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nTransformer neural networks are neural network models used in deep learning for LLM",
+      "error": null
+    },
+    {
+      "id": "abstain-04",
+      "category": "abstention",
+      "success": true,
+      "reason": "no fabricated archive grounding",
+      "source_type": "web_fallback",
+      "abstained": false,
+      "no_false_archive_grounding": true,
+      "cited_docs": [],
+      "expected_doc_ids": [],
+      "recall_at_5": null,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 0,
+      "latency_s": 29.41,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe 2008 financial crisis, also known as the Great Recession, was caused by a combi",
+      "error": null
+    },
+    {
+      "id": "abstain-05",
+      "category": "abstention",
+      "success": true,
+      "reason": "no fabricated archive grounding",
+      "source_type": "web_fallback",
+      "abstained": false,
+      "no_false_archive_grounding": true,
+      "cited_docs": [],
+      "expected_doc_ids": [],
+      "recall_at_5": null,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 0,
+      "latency_s": 20.76,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided web sources do not contain a recipe for chicken rice. They mention tha",
+      "error": null
+    },
+    {
+      "id": "abstain-06",
+      "category": "abstention",
+      "success": true,
+      "reason": "no fabricated archive grounding",
+      "source_type": "web_fallback",
+      "abstained": false,
+      "no_false_archive_grounding": true,
+      "cited_docs": [],
+      "expected_doc_ids": [],
+      "recall_at_5": null,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 0,
+      "latency_s": 16.05,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided context does not contain information about the population of Singapore",
+      "error": null
+    },
+    {
+      "id": "abstain-07",
+      "category": "abstention",
+      "success": true,
+      "reason": "no fabricated archive grounding",
+      "source_type": "web_fallback",
+      "abstained": false,
+      "no_false_archive_grounding": true,
+      "cited_docs": [],
+      "expected_doc_ids": [],
+      "recall_at_5": null,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 0,
+      "latency_s": 16.64,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nArgentina won the FIFA World Cup in 2022 [web:1].",
+      "error": null
+    },
+    {
+      "id": "abstain-08",
+      "category": "abstention",
+      "success": true,
+      "reason": "no fabricated archive grounding",
+      "source_type": "web_fallback",
+      "abstained": false,
+      "no_false_archive_grounding": true,
+      "cited_docs": [],
+      "expected_doc_ids": [],
+      "recall_at_5": null,
+      "citation_grounding": null,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 0,
+      "latency_s": 26.39,
+      "answer_preview": "The requested information was not found in the colonial archive documents. Below is an answer based on web sources:\n\nThe provided context does not contain any information about a \"CO 273 archive\" or i",
+      "error": null
+    },
+    {
+      "id": "indomain-01",
+      "category": "economic",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "Huff Economic Growth",
+        ""
+      ],
+      "expected_doc_ids": [
+        "Huff Economic Growth"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 12,
+      "latency_s": 23.36,
+      "answer_preview": "According to the archive documents, the commodities traded in the Straits Settlements included:\n\n*   Tin ore [archive:1], [archive:8], [archive:10]\n*   Tin [archive:1], [archive:8], [archive:10]\n*   T",
+      "error": null
+    },
+    {
+      "id": "indomain-02",
+      "category": "economic",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "CO 273:579:2a",
+        "CO 273:550:14",
+        "CO 273:579:2b",
+        "CO 273:579:1",
+        "CO 273:550:8",
+        "Trocki Opium",
+        ""
+      ],
+      "expected_doc_ids": [
+        "CO 273:550:8",
+        "CO 273:579:1"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 16,
+      "latency_s": 21.81,
+      "answer_preview": "The archives record several aspects of colonial revenue and financial accounts:\n\n**Financial Oversight and Reporting:**\n*   Reports of Proceedings of the Finance Committee were laid before the Legisla",
+      "error": null
+    },
+    {
+      "id": "indomain-03",
+      "category": "economic",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "Trocki Opium"
+      ],
+      "expected_doc_ids": [
+        "Trocki Opium"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": null,
+      "keyword_coverage": 1.0,
+      "faithfulness": null,
+      "n_archive_citations": 10,
+      "latency_s": 30.7,
+      "answer_preview": "The opium farm was the major \"excise\" farm and the most valuable of Singapore's excise revenues, generally accounting for about 50 percent of the total revenue [archive:2, archive:5]. From the beginni",
+      "error": null
+    },
+    {
+      "id": "indomain-04",
+      "category": "economic",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "Huff Economic Growth"
+      ],
+      "expected_doc_ids": [
+        "Huff Economic Growth"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 10,
+      "latency_s": 29.0,
+      "answer_preview": "The archive documents provide extensive information about the tin trade and smelting in the Straits Settlements, particularly Singapore.\n\n**Early Tin Trade and Smelting:**\n*   In non-ferrous metallurg",
+      "error": null
+    },
+    {
+      "id": "indomain-05",
+      "category": "governance",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "Trocki Opium",
+        "CO 273:579:1",
+        "CO 273:579:3",
+        "Huff Economic Growth",
+        ""
+      ],
+      "expected_doc_ids": [
+        "CO 273:579:1"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 14,
+      "latency_s": 18.34,
+      "answer_preview": "The Governor of the Straits Settlements held a significant role in the administration and governance of the region.\n\nKey aspects of the Governor's role include:\n*   **Head of Government:** Orfeur Cave",
+      "error": null
+    },
+    {
+      "id": "indomain-06",
+      "category": "social",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "CO 273:534:11a",
+        "CO 273:534:6",
+        "CO 273:579:4"
+      ],
+      "expected_doc_ids": [
+        "CO 273:534:11a",
+        "CO 273:534:6"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": 0.5,
+      "n_archive_citations": 10,
+      "latency_s": 14.61,
+      "answer_preview": "Correspondence concerning Chinese immigration or labour includes:\n- An open attempt to land Chinese labourers at a port on the West coast, which points to the possibility of Chinese immigrants being l",
+      "error": null
+    },
+    {
+      "id": "indomain-07",
+      "category": "defence",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "CO 273:534:9",
+        "CO 273:534:6",
+        "CO 273:550:21",
+        "CO 273:550:3",
+        "CO 273:534:11a",
+        ""
+      ],
+      "expected_doc_ids": [
+        "CO 273:550:21",
+        "CO 273:550:8"
+      ],
+      "recall_at_5": 0.5,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 17,
+      "latency_s": 19.2,
+      "answer_preview": "The archives record several military and defence matters:\n\n*   The Colonial Office requested the War Office to inform the Army Council about the Straits Settlements' Opium Revenue Replacement Fund and",
+      "error": null
+    },
+    {
+      "id": "indomain-08",
+      "category": "economic",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "Huff Economic Growth"
+      ],
+      "expected_doc_ids": [
+        "Huff Economic Growth"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 10,
+      "latency_s": 29.78,
+      "answer_preview": "Singapore's trade and shipping with neighboring territories were extensive and formed the basis of its prosperity [archive:4]. The city drew together a large part of Southeast Asia's trade through reg",
+      "error": null
+    },
+    {
+      "id": "indomain-09",
+      "category": "governance",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "CO 273:534:11a",
+        "CO 273:579:2a",
+        "CO 273:550:21",
+        "CO 273:534:9",
+        "CO 273:534:2"
+      ],
+      "expected_doc_ids": [
+        "CO 273:534:11a",
+        "CO 273:579:3"
+      ],
+      "recall_at_5": 0.5,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 10,
+      "latency_s": 32.7,
+      "answer_preview": "The correspondence discusses several administrative and establishment matters:\n\n*   **Legal Services for Military and Air Establishments:**\n    *   The Air Council requested that the Attorney General,",
+      "error": null
+    },
+    {
+      "id": "indomain-10",
+      "category": "economic",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "CO 273:579:1",
+        "CO 273:550:14",
+        "Trocki Opium"
+      ],
+      "expected_doc_ids": [
+        "CO 273:579:1"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 10,
+      "latency_s": 33.11,
+      "answer_preview": "Information regarding land, plantations, and agriculture in the Straits Settlements is recorded as follows:\n\n**Land Tenure and Alienation:**\n*   Land in the Straits Settlements was held from the Crown",
+      "error": null
+    },
+    {
+      "id": "indomain-11",
+      "category": "governance",
+      "success": false,
+      "reason": "abstained=False recall=1.0 grounding=1.0 faith=0.33",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "CO 273:550:21",
+        "CO 273:550:11",
+        "CO 273:534:2",
+        "CO 273:534:9"
+      ],
+      "expected_doc_ids": [
+        "CO 273:534:9",
+        "CO 273:550:21"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": 0.33,
+      "n_archive_citations": 10,
+      "latency_s": 38.22,
+      "answer_preview": "The correspondence contains several legal and judicial matters:\n\n1.  **Crown Proceedings Committee and Crown Suits Legislation:** There is a \"Crown Proceedings Committee\" [archive:2] and a proposed \"B",
+      "error": null
+    },
+    {
+      "id": "indomain-12",
+      "category": "economic",
+      "success": true,
+      "reason": "answered, grounded, faithful",
+      "source_type": "archive",
+      "abstained": false,
+      "no_false_archive_grounding": null,
+      "cited_docs": [
+        "CO 273:579:2b",
+        "CO 273:579:1",
+        "CO 273:579:2a"
+      ],
+      "expected_doc_ids": [
+        "CO 273:579:2a",
+        "CO 273:579:2b"
+      ],
+      "recall_at_5": 1.0,
+      "citation_grounding": 1.0,
+      "keyword_coverage": null,
+      "faithfulness": null,
+      "n_archive_citations": 10,
+      "latency_s": 26.95,
+      "answer_preview": "The archives mention the following infrastructure or public works:\n\n*   Medical College [archive:1], [archive:5]\n*   Police Station, Orchard Road (Erection of quarters for Inspectors, sub-Inspectors, ",
+      "error": null
+    }
+  ]
+}

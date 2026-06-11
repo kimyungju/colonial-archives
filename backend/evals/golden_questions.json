@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "notes": "Golden question set for the Colonial Archives Graph-RAG retrieval. 'abstention' questions are out-of-corpus and MUST trigger the archive-first fallback. In-domain questions MUST NOT abstain and are scored on citation grounding + faithfulness; expected_doc_ids are filled from a live discovery pass (evals/discover.py -> results/discovery.json) so Recall@5 is measured against confirmed source documents.",
+  "notes": "Golden question set for the Colonial Archives Graph-RAG retrieval. 'abstention'-category questions are OUT-OF-CORPUS: the archive-first design may answer them via the labelled web fallback, so success is 'no fabricated archive grounding' (zero archive citations, source_type != archive) rather than full refusal. In-domain questions MUST NOT abstain and are scored on Recall@5 + citation grounding + faithfulness; expected_doc_ids are filled from a live discovery pass (evals/discover.py -> results/discovery.json) against confirmed source documents.",
   "questions": [
     {
       "id": "abstain-01",
@@ -46,84 +46,84 @@
       "id": "indomain-01",
       "category": "economic",
       "question": "What commodities were traded in the Straits Settlements according to the archive?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["Huff Economic Growth"],
       "expected_keywords": []
     },
     {
       "id": "indomain-02",
       "category": "economic",
       "question": "What does the archive record about colonial revenue and financial accounts?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["CO 273:550:8", "CO 273:579:1"],
       "expected_keywords": []
     },
     {
       "id": "indomain-03",
       "category": "economic",
       "question": "What is recorded about opium revenue or the opium farm?",
-      "expected_doc_ids": [],
-      "expected_keywords": []
+      "expected_doc_ids": ["Trocki Opium"],
+      "expected_keywords": ["opium"]
     },
     {
       "id": "indomain-04",
       "category": "economic",
       "question": "What does the archive say about tin mining or the tin trade?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["Huff Economic Growth"],
       "expected_keywords": []
     },
     {
       "id": "indomain-05",
       "category": "governance",
       "question": "What was the role of the Governor in the Straits Settlements?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["CO 273:579:1"],
       "expected_keywords": []
     },
     {
       "id": "indomain-06",
       "category": "social",
       "question": "What correspondence concerns Chinese immigration or labour?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["CO 273:534:11a", "CO 273:534:6"],
       "expected_keywords": []
     },
     {
       "id": "indomain-07",
       "category": "defence",
       "question": "What military or defence matters are recorded in the archive?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["CO 273:550:21", "CO 273:550:8"],
       "expected_keywords": []
     },
     {
       "id": "indomain-08",
       "category": "economic",
       "question": "What trade or shipping with neighbouring territories is recorded?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["Huff Economic Growth"],
       "expected_keywords": []
     },
     {
       "id": "indomain-09",
       "category": "governance",
       "question": "What administrative or establishment matters are discussed in the correspondence?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["CO 273:534:11a", "CO 273:579:3"],
       "expected_keywords": []
     },
     {
       "id": "indomain-10",
       "category": "economic",
       "question": "What is recorded about land, plantations, or agriculture?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["CO 273:579:1"],
       "expected_keywords": []
     },
     {
       "id": "indomain-11",
       "category": "governance",
       "question": "What legal or judicial matters appear in the correspondence?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["CO 273:534:9", "CO 273:550:21"],
       "expected_keywords": []
     },
     {
       "id": "indomain-12",
       "category": "economic",
       "question": "What infrastructure or public works are mentioned in the archive?",
-      "expected_doc_ids": [],
+      "expected_doc_ids": ["CO 273:579:2a", "CO 273:579:2b"],
       "expected_keywords": []
     }
   ]

@@ -77,7 +77,11 @@ async def judge_faithfulness(question: str, answer: str, source_spans: list[str]
         resp = await loop.run_in_executor(
             None,
             lambda: _get_model().generate_content(
-                prompt, generation_config=GenerationConfig(temperature=0.0, max_output_tokens=256)
+                prompt,
+                # Gemini 2.5-flash is a thinking model: it spends output tokens
+                # on internal reasoning, so a small cap leaves no room for the
+                # actual JSON and resp.text comes back empty. Give it headroom.
+                generation_config=GenerationConfig(temperature=0.0, max_output_tokens=1024),
             ),
         )
         return _parse(resp.text or "")

@@ -74,22 +74,28 @@ async def run_question(task: dict, use_judge: bool) -> dict:
     abstained = metrics.is_abstention(answer)
     markers = metrics.citation_markers(answer)
 
-    expect_abstain = task["category"] == "abstention"
-    abstention_correct = (abstained == expect_abstain)
+    # Colonial Archives is archive-first WITH a labelled web fallback. For an
+    # out-of-corpus question the correct behaviour is NOT necessarily a full
+    # refusal — it is to avoid presenting archive citations as if the archive
+    # supported the answer. So the guarantee we score is "no fabricated archive
+    # grounding": zero archive citations and source_type not "archive".
+    out_of_corpus = task["category"] == "abstention"
+    no_false_archive_grounding = (len(archive_cites) == 0 and resp.source_type != "archive")
 
     recall = metrics.recall_at_k(task.get("expected_doc_ids", []), cited_docs, K)
     grounding = metrics.citation_grounding_rate(markers, len(archive_cites), len(web_cites))
     keyword_cov = metrics.expected_keywords_present(answer, task.get("expected_keywords", []))
 
     faithfulness = None
-    if use_judge and not abstained and archive_cites:
+    if use_judge and not out_of_corpus and not abstained and archive_cites:
         spans = [c.text_span for c in archive_cites]
         faithfulness = await judge_faithfulness(task["question"], answer, spans)
 
     # Per-task success criteria.
-    if expect_abstain:
-        success = abstention_correct
-        reason = "abstained correctly" if success else "should have abstained but answered"
+    if out_of_corpus:
+        success = no_false_archive_grounding
+        reason = ("no fabricated archive grounding" if success
+                  else f"presented archive grounding for out-of-corpus q (src={resp.source_type}, archive_cites={len(archive_cites)})")
     else:
         checks = [not abstained]
         if recall is not None:
@@ -111,7 +117,7 @@ async def run_question(task: dict, use_judge: bool) -> dict:
         "reason": reason,
         "source_type": resp.source_type,
         "abstained": abstained,
-        "abstention_correct": abstention_correct,
+        "no_false_archive_grounding": no_false_archive_grounding if out_of_corpus else None,
         "cited_docs": cited_docs,
         "expected_doc_ids": task.get("expected_doc_ids", []),
         "recall_at_5": recall,
@@ -134,7 +140,7 @@ def aggregate(results: list[dict]) -> dict:
     n = len(results)
     ok = [r for r in results if not r.get("error")]
     in_domain = [r for r in ok if r["category"] != "abstention"]
-    abstention = [r for r in ok if r["category"] == "abstention"]
+    out_corpus = [r for r in ok if r["category"] == "abstention"]
     latencies = sorted(r["latency_s"] for r in results)
     p95_idx = max(0, int(round(0.95 * n)) - 1)
 
@@ -145,8 +151,9 @@ def aggregate(results: list[dict]) -> dict:
         "questions": n,
         "errors": sum(1 for r in results if r.get("error")),
         "overall_success_rate": rate(ok),
-        "abstention_accuracy": round(
-            100 * sum(r["abstention_correct"] for r in ok) / len(ok), 1) if ok else None,
+        "no_false_archive_grounding_rate": round(
+            100 * sum(bool(r.get("no_false_archive_grounding")) for r in out_corpus) / len(out_corpus), 1
+        ) if out_corpus else None,
         "in_domain_answer_rate": round(
             100 * sum(not r["abstained"] for r in in_domain) / len(in_domain), 1
         ) if in_domain else None,
@@ -154,7 +161,7 @@ def aggregate(results: list[dict]) -> dict:
         "mean_citation_grounding": _mean([r.get("citation_grounding") for r in in_domain]),
         "mean_faithfulness": _mean([r.get("faithfulness") for r in in_domain]),
         "mean_keyword_coverage": _mean([r.get("keyword_coverage") for r in in_domain]),
-        "abstention_questions": len(abstention),
+        "out_of_corpus_questions": len(out_corpus),
         "in_domain_questions": len(in_domain),
         "latency_p50_s": latencies[n // 2] if n else None,
         "latency_p95_s": latencies[p95_idx] if n else None,
