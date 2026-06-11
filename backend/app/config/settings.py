@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     RERANK_CANDIDATES: int = 30
     RERANK_TOP_N: int = 5
     RERANK_GATE_THRESHOLD: float = 0.0
+    # Out-of-corpus gate on min vector distance (0.0 disables). The Phase 1
+    # sweep showed min distance separates in-domain (0.28-0.41) from OOC
+    # (0.42+) where the cross-encoder max score does not — see FINDINGS.md.
+    DISTANCE_GATE_THRESHOLD: float = 0.0
 
     # Entity extraction (Phase 2)
     ENTITY_SIMILARITY_THRESHOLD: float = 0.85

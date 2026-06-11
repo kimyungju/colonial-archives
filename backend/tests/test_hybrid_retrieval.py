@@ -637,6 +637,69 @@ class TestRerankerIntegration:
         assert result.citations == []
 
     @pytest.mark.asyncio
+    async def test_distance_gate_blocks_out_of_corpus_without_reranker(
+        self, service, monkeypatch
+    ):
+        """Phase 1 sweep finding: min vector distance separates in-domain
+        (0.28-0.41) from out-of-corpus (0.42+) far better than the
+        cross-encoder max score. The distance gate must work even with the
+        reranker disabled."""
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", False)
+        monkeypatch.setattr(settings, "DISTANCE_GATE_THRESHOLD", 0.4175)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup(
+                (e, v, n, s, l, w), distances=[0.43, 0.45],
+                llm_answer="Web answer [web:1].",
+            )
+            with mock_rr_patch:
+                result = await service.query("what does CO 273 say about cryptocurrency")
+
+            # archive LLM skipped; only the web-fallback call
+            assert l.generate_answer.call_count == 1
+            _a, kw = l.generate_answer.call_args
+            assert kw.get("source_type") == "web_fallback"
+
+        assert result.source_type == "web_fallback"
+        archive_cites = [c for c in result.citations
+                         if getattr(c, "type", "") == "archive"]
+        assert archive_cites == []
+
+    @pytest.mark.asyncio
+    async def test_distance_gate_passes_in_domain(self, service, monkeypatch):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", False)
+        monkeypatch.setattr(settings, "DISTANCE_GATE_THRESHOLD", 0.4175)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup((e, v, n, s, l, w), distances=[0.41, 0.45])
+            with mock_rr_patch:
+                result = await service.query("explain strait settlement")
+                w.search.assert_not_called()
+
+        assert result.source_type == "archive"
+
+    @pytest.mark.asyncio
+    async def test_distance_gate_disabled_at_zero(self, service, monkeypatch):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", False)
+        monkeypatch.setattr(settings, "DISTANCE_GATE_THRESHOLD", 0.0)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup((e, v, n, s, l, w), distances=[0.9])
+            with mock_rr_patch:
+                result = await service.query("explain strait settlement")
+
+        assert result.source_type == "archive"
+
+    @pytest.mark.asyncio
     async def test_reranker_failure_falls_back_to_unreranked(
         self, service, monkeypatch
     ):

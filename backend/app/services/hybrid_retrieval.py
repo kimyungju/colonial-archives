@@ -165,21 +165,36 @@ class HybridRetrievalService:
             relevance_score,
         )
 
-        # Step 6b — Relevance gate (FINDINGS.md Gap 1): when even the best
-        # reranked candidate scores below the corpus-tuned threshold, the
-        # question is out-of-corpus. Skip the archive LLM entirely (saves a
-        # Gemini call) and go straight to the web fallback.
-        gated = (
+        # Step 6b — Out-of-corpus relevance gate (FINDINGS.md Gap 1). Two
+        # corpus-tuned signals, either can gate; both default off:
+        #   - min vector distance: even the closest chunk is farther than
+        #     any in-domain query ever gets (the signal that actually
+        #     separates on this corpus — see the Phase 1 sweep)
+        #   - max rerank score: kept as an optional second signal
+        # Gated queries skip the archive LLM (saves a Gemini call) and go
+        # straight to the labelled web fallback.
+        min_distance = (
+            min(r["distance"] for r in vector_results) if vector_results else None
+        )
+        distance_gated = (
+            settings.DISTANCE_GATE_THRESHOLD > 0.0
+            and min_distance is not None
+            and min_distance > settings.DISTANCE_GATE_THRESHOLD
+        )
+        rerank_gated = (
             settings.RERANKER_ENABLED
             and rerank_max_score is not None
             and rerank_max_score < settings.RERANK_GATE_THRESHOLD
         )
+        gated = distance_gated or rerank_gated
 
         if gated:
             logger.info(
-                "Relevance gate: max rerank score %.4f < threshold %.4f; "
-                "skipping archive answer",
-                rerank_max_score,
+                "Relevance gate: min_distance=%s (threshold %.4f), "
+                "max_rerank=%s (threshold %.4f); skipping archive answer",
+                f"{min_distance:.4f}" if min_distance is not None else "n/a",
+                settings.DISTANCE_GATE_THRESHOLD,
+                f"{rerank_max_score:.4f}" if rerank_max_score is not None else "n/a",
                 settings.RERANK_GATE_THRESHOLD,
             )
             answer_text = FALLBACK_ANSWER
