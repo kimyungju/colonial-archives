@@ -14,11 +14,9 @@ import asyncio
 import json
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-from app.services.hybrid_retrieval import hybrid_retrieval_service  # noqa: E402
+# Settings are loaded by pydantic-settings from backend/.env (see
+# app/config/settings.py) — run this module from the backend directory.
+from app.services.hybrid_retrieval import hybrid_retrieval_service
 
 EVALS_DIR = Path(__file__).parent
 RESULTS_DIR = EVALS_DIR / "results"

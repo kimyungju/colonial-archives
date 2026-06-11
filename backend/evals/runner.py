@@ -34,13 +34,11 @@ import sys
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-from app.services.hybrid_retrieval import hybrid_retrieval_service  # noqa: E402
-from evals import metrics  # noqa: E402
-from evals.judge import judge_faithfulness  # noqa: E402
+# Settings are loaded by pydantic-settings from backend/.env (see
+# app/config/settings.py) — run this module from the backend directory.
+from app.services.hybrid_retrieval import hybrid_retrieval_service
+from evals import metrics
+from evals.judge import judge_faithfulness
 
 EVALS_DIR = Path(__file__).parent
 RESULTS_DIR = EVALS_DIR / "results"
