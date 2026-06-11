@@ -13,6 +13,7 @@ import re
 from collections import defaultdict
 
 from app.config.logging_config import log_stage
+from app.config.settings import settings
 from app.models.schemas import (
     ArchiveCitation,
     GraphEdge,
@@ -24,6 +25,7 @@ from app.models.schemas import (
 from app.services.embeddings import embeddings_service
 from app.services.llm import llm_service
 from app.services.neo4j_service import neo4j_service
+from app.services.reranker import reranker_service
 from app.services.storage import storage_service
 from app.services.vector_search import vector_search_service
 from app.services.web_search import web_search_service
@@ -72,8 +74,13 @@ class HybridRetrievalService:
         # Step 2 — Parallel: vector search + graph traversal.
         async def _timed_vector():
             with log_stage("vector_search", logger=logger):
+                # With the reranker on, over-fetch candidates so the
+                # cross-encoder has a real pool to rerank down to TOP_N.
+                top_k = (
+                    settings.RERANK_CANDIDATES if settings.RERANKER_ENABLED else None
+                )
                 return await vector_search_service.search(
-                    query_embedding, filter_categories=filter_categories
+                    query_embedding, top_k=top_k, filter_categories=filter_categories
                 )
 
         async def _timed_graph():
@@ -109,7 +116,27 @@ class HybridRetrievalService:
         if vector_results:
             vector_context = await self._load_chunk_contexts(vector_results)
 
-        # Step 5 — Merge vector + graph context chunks, deduplicate.
+        # Step 5a — Cross-encoder rerank of vector chunks (graph "Entity:"
+        # chunks are synthetic evidence on a different score scale; they
+        # pass through unreranked). The max score doubles as the relevance
+        # signal for the out-of-corpus gate below.
+        rerank_max_score: float | None = None
+        if settings.RERANKER_ENABLED and vector_context:
+            try:
+                with log_stage("rerank", logger=logger):
+                    vector_context, rerank_max_score = await reranker_service.rerank(
+                        question, vector_context, settings.RERANK_TOP_N
+                    )
+                # The cross-encoder score is the better relevance estimate;
+                # surface it as the citation confidence (same [0,1],
+                # higher-better semantics as the vector similarity).
+                for chunk in vector_context:
+                    chunk["confidence"] = chunk["rerank_score"]
+            except Exception:
+                logger.exception("Reranker failed; using unreranked vector context")
+                rerank_max_score = None
+
+        # Step 5b — Merge vector + graph context chunks, deduplicate.
         graph_context = graph_result.get("context_chunks", [])
         merged_context = self._merge_contexts(vector_context, graph_context)
 
@@ -138,18 +165,37 @@ class HybridRetrievalService:
             relevance_score,
         )
 
-        # Step 7 — Generate archive-only answer via LLM.
-        with log_stage("llm_generation", logger=logger):
-            llm_result: dict = await llm_service.generate_answer(
-                question, merged_context, source_type="archive"
-            )
-        answer_text: str = llm_result["answer"]
+        # Step 6b — Relevance gate (FINDINGS.md Gap 1): when even the best
+        # reranked candidate scores below the corpus-tuned threshold, the
+        # question is out-of-corpus. Skip the archive LLM entirely (saves a
+        # Gemini call) and go straight to the web fallback.
+        gated = (
+            settings.RERANKER_ENABLED
+            and rerank_max_score is not None
+            and rerank_max_score < settings.RERANK_GATE_THRESHOLD
+        )
 
-        # Step 8 — If archive couldn't answer, try web fallback.
+        if gated:
+            logger.info(
+                "Relevance gate: max rerank score %.4f < threshold %.4f; "
+                "skipping archive answer",
+                rerank_max_score,
+                settings.RERANK_GATE_THRESHOLD,
+            )
+            answer_text = FALLBACK_ANSWER
+        else:
+            # Step 7 — Generate archive-only answer via LLM.
+            with log_stage("llm_generation", logger=logger):
+                llm_result: dict = await llm_service.generate_answer(
+                    question, merged_context, source_type="archive"
+                )
+            answer_text = llm_result["answer"]
+
+        # Step 8 — If archive couldn't answer (or was gated), try web fallback.
         web_context: list[dict] = []
         source_type = "archive"
 
-        if answer_text.strip() == FALLBACK_ANSWER and merged_context:
+        if (gated or answer_text.strip() == FALLBACK_ANSWER) and merged_context:
             logger.info("Archive could not answer; triggering web fallback")
             try:
                 web_context = await web_search_service.search(question)
@@ -171,6 +217,17 @@ class HybridRetrievalService:
                     logger.info("Web fallback answer generated")
             except Exception:
                 logger.exception("Web fallback failed")
+
+        # A gated query must never go out with archive grounding. If the web
+        # fallback could not produce an answer, abstain with no citations
+        # (same shape as the no-results early exit in step 3).
+        if gated and source_type == "archive":
+            return QueryResponse(
+                answer=FALLBACK_ANSWER,
+                source_type="archive",
+                citations=[],
+                graph=None,
+            )
 
         # Step 9 — Build citation list (archive + web).
         citations: list[ArchiveCitation | WebCitation] = []

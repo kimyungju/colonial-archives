@@ -422,6 +422,243 @@ class TestArchiveFirstBehavior:
             mock_web.search.assert_called_once()
 
 
+def _pipeline_mocks(vector_results, chunk_texts, graph_chunks=None):
+    """Patch the full query() dependency set with a happy-path setup.
+
+    Returns the patch context managers dict for use in `with` statements.
+    """
+    mock_embed = patch("app.services.hybrid_retrieval.embeddings_service")
+    mock_vs = patch("app.services.hybrid_retrieval.vector_search_service")
+    mock_neo4j = patch("app.services.hybrid_retrieval.neo4j_service")
+    mock_storage = patch("app.services.hybrid_retrieval.storage_service")
+    mock_llm = patch("app.services.hybrid_retrieval.llm_service")
+    mock_web = patch("app.services.hybrid_retrieval.web_search_service")
+    return mock_embed, mock_vs, mock_neo4j, mock_storage, mock_llm, mock_web
+
+
+class TestRerankerIntegration:
+    """Reranker sits between retrieval and the LLM, behind RERANKER_ENABLED.
+
+    Spec:
+      - disabled: identical pipeline to before (default top_k, no rerank call)
+      - enabled: vector search fetches RERANK_CANDIDATES, reranker keeps
+        RERANK_TOP_N vector chunks (graph chunks pass through unreranked)
+      - gate: max rerank score < RERANK_GATE_THRESHOLD -> web fallback
+        WITHOUT calling the archive LLM; web failure -> abstain, no citations
+      - reranker exception -> fall back to unreranked pipeline
+    """
+
+    def _setup(self, stack, *, distances, llm_answer="Answer [archive:1].",
+               rerank_return=None, rerank_error=None):
+        mock_embed, mock_vs, mock_neo4j, mock_storage, mock_llm, mock_web = stack
+
+        mock_embed.embed_query = AsyncMock(return_value=[0.1] * 768)
+        mock_vs.search = AsyncMock(return_value=[
+            {"id": f"doc_{chr(97+i)}_chunk_0", "distance": d}
+            for i, d in enumerate(distances)
+        ])
+        mock_neo4j.search_entities = AsyncMock(return_value=[])
+
+        def fake_blob(path):
+            blob = MagicMock()
+            doc = path.split("/")[1].replace(".json", "")
+            blob.download_as_text.return_value = json.dumps([
+                {"chunk_id": f"{doc}_chunk_0", "text": f"Text of {doc}", "pages": [1]}
+            ])
+            return blob
+
+        mock_storage._bucket = MagicMock()
+        mock_storage._bucket.blob.side_effect = fake_blob
+
+        mock_llm.generate_answer = AsyncMock(return_value={
+            "answer": llm_answer, "context_chunks": [],
+        })
+        mock_web.search = AsyncMock(return_value=[
+            {"id": "web_1", "title": "W", "url": "https://w", "text": "Web.",
+             "cite_type": "web"}
+        ])
+
+        mock_rr = patch("app.services.hybrid_retrieval.reranker_service")
+        return mock_rr
+
+    @pytest.mark.asyncio
+    async def test_disabled_passes_default_topk_and_skips_reranker(
+        self, service, monkeypatch
+    ):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", False)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup((e, v, n, s, l, w), distances=[0.3])
+            with mock_rr_patch as rr:
+                await service.query("explain strait settlement")
+                rr.rerank.assert_not_called()
+
+        _args, kwargs = v.search.call_args
+        assert kwargs.get("top_k") is None
+
+    @pytest.mark.asyncio
+    async def test_enabled_requests_rerank_candidates(self, service, monkeypatch):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", True)
+        monkeypatch.setattr(settings, "RERANK_CANDIDATES", 30)
+        monkeypatch.setattr(settings, "RERANK_GATE_THRESHOLD", 0.0)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup((e, v, n, s, l, w), distances=[0.3, 0.4])
+            with mock_rr_patch as rr:
+                async def fake_rerank(q, chunks, top_n):
+                    for c in chunks:
+                        c["rerank_score"] = 0.9
+                    return chunks[:top_n], 0.9
+                rr.rerank = AsyncMock(side_effect=fake_rerank)
+                result = await service.query("explain strait settlement")
+                rr.rerank.assert_called_once()
+
+        _args, kwargs = v.search.call_args
+        assert kwargs.get("top_k") == 30
+        assert result.source_type == "archive"
+
+    @pytest.mark.asyncio
+    async def test_rerank_keeps_top_n_and_reorders_citations(
+        self, service, monkeypatch
+    ):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", True)
+        monkeypatch.setattr(settings, "RERANK_TOP_N", 2)
+        monkeypatch.setattr(settings, "RERANK_GATE_THRESHOLD", 0.0)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup(
+                (e, v, n, s, l, w), distances=[0.3, 0.35, 0.4]
+            )
+            with mock_rr_patch as rr:
+                async def fake_rerank(q, chunks, top_n):
+                    # cross-encoder disagrees with vector order: c (last) wins
+                    order = {"doc_c_chunk_0": 0.95, "doc_a_chunk_0": 0.6,
+                             "doc_b_chunk_0": 0.2}
+                    for c in chunks:
+                        c["rerank_score"] = order[c["id"]]
+                    ranked = sorted(chunks, key=lambda c: c["rerank_score"],
+                                    reverse=True)
+                    return ranked[:top_n], 0.95
+                rr.rerank = AsyncMock(side_effect=fake_rerank)
+                result = await service.query("explain strait settlement")
+
+        archive_cites = [c for c in result.citations
+                         if getattr(c, "type", "") == "archive"]
+        assert [c.doc_id for c in archive_cites] == ["doc_c", "doc_a"]
+        # confidence surfaces the cross-encoder score, not vector similarity
+        assert archive_cites[0].confidence == pytest.approx(0.95)
+
+    @pytest.mark.asyncio
+    async def test_gate_below_threshold_skips_archive_llm_uses_web(
+        self, service, monkeypatch
+    ):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", True)
+        monkeypatch.setattr(settings, "RERANK_GATE_THRESHOLD", 0.5)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup(
+                (e, v, n, s, l, w), distances=[0.7],
+                llm_answer="Web answer [web:1].",
+            )
+            with mock_rr_patch as rr:
+                async def fake_rerank(q, chunks, top_n):
+                    for c in chunks:
+                        c["rerank_score"] = 0.1
+                    return chunks[:top_n], 0.1
+                rr.rerank = AsyncMock(side_effect=fake_rerank)
+                result = await service.query("what is the capital of france")
+
+            # archive LLM must NOT run; only the web-fallback LLM call
+            assert l.generate_answer.call_count == 1
+            _a, kw = l.generate_answer.call_args
+            assert kw.get("source_type") == "web_fallback"
+            w.search.assert_called_once()
+
+        assert result.source_type == "web_fallback"
+        archive_cites = [c for c in result.citations
+                         if getattr(c, "type", "") == "archive"]
+        assert archive_cites == []
+
+    @pytest.mark.asyncio
+    async def test_gate_passes_at_threshold(self, service, monkeypatch):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", True)
+        monkeypatch.setattr(settings, "RERANK_GATE_THRESHOLD", 0.5)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup((e, v, n, s, l, w), distances=[0.3])
+            with mock_rr_patch as rr:
+                async def fake_rerank(q, chunks, top_n):
+                    for c in chunks:
+                        c["rerank_score"] = 0.5
+                    return chunks[:top_n], 0.5
+                rr.rerank = AsyncMock(side_effect=fake_rerank)
+                result = await service.query("explain strait settlement")
+                w.search.assert_not_called()
+
+        assert result.source_type == "archive"
+
+    @pytest.mark.asyncio
+    async def test_gate_with_web_failure_abstains_without_citations(
+        self, service, monkeypatch
+    ):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", True)
+        monkeypatch.setattr(settings, "RERANK_GATE_THRESHOLD", 0.5)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup((e, v, n, s, l, w), distances=[0.7])
+            with mock_rr_patch as rr:
+                async def fake_rerank(q, chunks, top_n):
+                    for c in chunks:
+                        c["rerank_score"] = 0.1
+                    return chunks[:top_n], 0.1
+                rr.rerank = AsyncMock(side_effect=fake_rerank)
+                w.search = AsyncMock(side_effect=Exception("tavily down"))
+                result = await service.query("what is the capital of france")
+
+        assert "cannot answer" in result.answer.lower()
+        assert result.citations == []
+
+    @pytest.mark.asyncio
+    async def test_reranker_failure_falls_back_to_unreranked(
+        self, service, monkeypatch
+    ):
+        from app.config.settings import settings
+        monkeypatch.setattr(settings, "RERANKER_ENABLED", True)
+        monkeypatch.setattr(settings, "RERANK_GATE_THRESHOLD", 0.5)
+
+        patches = _pipeline_mocks(None, None)
+        with patches[0] as e, patches[1] as v, patches[2] as n, \
+             patches[3] as s, patches[4] as l, patches[5] as w:
+            mock_rr_patch = self._setup((e, v, n, s, l, w), distances=[0.3])
+            with mock_rr_patch as rr:
+                rr.rerank = AsyncMock(side_effect=RuntimeError("model load failed"))
+                result = await service.query("explain strait settlement")
+
+        # pipeline survives, archive answer produced, no gate applied
+        assert result.source_type == "archive"
+        archive_cites = [c for c in result.citations
+                         if getattr(c, "type", "") == "archive"]
+        assert len(archive_cites) == 1
+
+
 class TestEntityHintCap:
     """A long question must not produce an unbounded number of entity
     hints, AND the cap must not silently drop the entities that actually
