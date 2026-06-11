@@ -1,0 +1,55 @@
+name: Retrieval Evals
+
+# Full golden-question eval run against the live hybrid-retrieval pipeline.
+# Hits Vertex AI + Neo4j Aura + GCS and uses Gemini as a faithfulness judge,
+# so it runs on demand and weekly rather than on every push. Fails if any
+# threshold in backend/evals/thresholds.json regresses.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1" # weekly Monday 03:00 UTC
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      DOC_AI_PROCESSOR_ID: ${{ secrets.DOC_AI_PROCESSOR_ID }}
+      CLOUD_STORAGE_BUCKET: ${{ secrets.CLOUD_STORAGE_BUCKET }}
+      VECTOR_SEARCH_ENDPOINT: ${{ secrets.VECTOR_SEARCH_ENDPOINT }}
+      VECTOR_SEARCH_INDEX_ID: ${{ secrets.VECTOR_SEARCH_INDEX_ID }}
+      VECTOR_SEARCH_DEPLOYED_INDEX_ID: ${{ secrets.VECTOR_SEARCH_DEPLOYED_INDEX_ID }}
+      NEO4J_URI: ${{ secrets.NEO4J_URI }}
+      NEO4J_USER: ${{ secrets.NEO4J_USER }}
+      NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run retrieval evals with regression gate
+        run: python -m evals.runner --check --concurrency 3
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-eval-report
+          path: backend/evals/results/
+          retention-days: 90

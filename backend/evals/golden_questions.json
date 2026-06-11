@@ -1,0 +1,130 @@
+{
+  "version": "1.0",
+  "notes": "Golden question set for the Colonial Archives Graph-RAG retrieval. 'abstention' questions are out-of-corpus and MUST trigger the archive-first fallback. In-domain questions MUST NOT abstain and are scored on citation grounding + faithfulness; expected_doc_ids are filled from a live discovery pass (evals/discover.py -> results/discovery.json) so Recall@5 is measured against confirmed source documents.",
+  "questions": [
+    {
+      "id": "abstain-01",
+      "category": "abstention",
+      "question": "What is the capital of France?"
+    },
+    {
+      "id": "abstain-02",
+      "category": "abstention",
+      "question": "Who is the current CEO of Tesla?"
+    },
+    {
+      "id": "abstain-03",
+      "category": "abstention",
+      "question": "Explain how a transformer neural network works."
+    },
+    {
+      "id": "abstain-04",
+      "category": "abstention",
+      "question": "What were the main causes of the 2008 financial crisis?"
+    },
+    {
+      "id": "abstain-05",
+      "category": "abstention",
+      "question": "Give me a recipe for chicken rice."
+    },
+    {
+      "id": "abstain-06",
+      "category": "abstention",
+      "question": "What is the population of Singapore in 2026?"
+    },
+    {
+      "id": "abstain-07",
+      "category": "abstention",
+      "question": "Who won the FIFA World Cup in 2022?"
+    },
+    {
+      "id": "abstain-08",
+      "category": "abstention",
+      "question": "What does the CO 273 archive say about quantum computing research?"
+    },
+    {
+      "id": "indomain-01",
+      "category": "economic",
+      "question": "What commodities were traded in the Straits Settlements according to the archive?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-02",
+      "category": "economic",
+      "question": "What does the archive record about colonial revenue and financial accounts?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-03",
+      "category": "economic",
+      "question": "What is recorded about opium revenue or the opium farm?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-04",
+      "category": "economic",
+      "question": "What does the archive say about tin mining or the tin trade?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-05",
+      "category": "governance",
+      "question": "What was the role of the Governor in the Straits Settlements?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-06",
+      "category": "social",
+      "question": "What correspondence concerns Chinese immigration or labour?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-07",
+      "category": "defence",
+      "question": "What military or defence matters are recorded in the archive?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-08",
+      "category": "economic",
+      "question": "What trade or shipping with neighbouring territories is recorded?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-09",
+      "category": "governance",
+      "question": "What administrative or establishment matters are discussed in the correspondence?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-10",
+      "category": "economic",
+      "question": "What is recorded about land, plantations, or agriculture?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-11",
+      "category": "governance",
+      "question": "What legal or judicial matters appear in the correspondence?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    },
+    {
+      "id": "indomain-12",
+      "category": "economic",
+      "question": "What infrastructure or public works are mentioned in the archive?",
+      "expected_doc_ids": [],
+      "expected_keywords": []
+    }
+  ]
+}
