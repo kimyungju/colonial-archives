@@ -1,5 +1,6 @@
-import { useMemo, useCallback } from "react";
+import { useMemo } from "react";
 import Markdown from "react-markdown";
+import type { Components } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import type { ChatMessage as ChatMessageType, Citation } from "../types";
 import { injectCitationHtml, extractUniqueCitations } from "../utils/parseCitations";
@@ -12,18 +13,7 @@ interface Props {
 export default function ChatMessage({ message }: Props) {
   const isUser = message.role === "user";
   const openPdfModal = useAppStore((s) => s.openPdfModal);
-
-  if (isUser) {
-    return (
-      <div className="flex justify-end mb-3 animate-fade-in">
-        <div className="bg-ink-600 rounded-2xl rounded-br-sm px-4 py-2 max-w-[85%]">
-          <p className="text-sm whitespace-pre-wrap text-white">{message.content}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const citations = message.citations ?? [];
+  const citations = useMemo(() => message.citations ?? [], [message.citations]);
 
   // Build citation lookup map once
   const citationMap = useMemo(() => {
@@ -63,11 +53,13 @@ export default function ChatMessage({ message }: Props) {
         : null;
 
   // Custom <cite> renderer for inline citations
-  const markdownComponents = useMemo(
+  const markdownComponents = useMemo<Components>(
     () => ({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      cite: ({ children, ...props }: any) => {
-        const ref = props["data-ref"] as string | undefined;
+      cite: ({ children, node, ...props }) => {
+        const rawRef =
+          node?.properties?.dataRef ?? node?.properties?.["data-ref"];
+        const ref =
+          typeof rawRef === "string" ? rawRef : undefined;
         if (!ref) return <cite {...props}>{children}</cite>;
 
         const citation = citationMap.get(ref);
@@ -79,7 +71,7 @@ export default function ChatMessage({ message }: Props) {
               type="button"
               className="inline-flex items-center bg-ink-600/20 text-ink-400 hover:bg-ink-600/35 hover:text-ink-300 px-1 rounded text-[10px] font-mono cursor-pointer transition-colors ml-0.5 align-super leading-none"
               title={`${citation.doc_id} p.${citation.pages.join(",")}`}
-              onClick={() => openPdfModal(citation.doc_id, citation.pages[0])}
+              onClick={() => openPdfModal(citation.doc_id, citation.pages[0] ?? 1)}
             >
               [{children}]
             </button>
@@ -103,6 +95,16 @@ export default function ChatMessage({ message }: Props) {
     [citationMap, openPdfModal]
   );
 
+  if (isUser) {
+    return (
+      <div className="flex justify-end mb-3 animate-fade-in">
+        <div className="bg-ink-600 rounded-2xl rounded-br-sm px-4 py-2 max-w-[85%]">
+          <p className="text-sm whitespace-pre-wrap text-white">{message.content}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex justify-start mb-3 animate-fade-in gap-2 items-start">
       <img src="/logo.png" alt="" className="w-6 h-6 rounded-full mt-1 shrink-0" />
@@ -124,7 +126,7 @@ export default function ChatMessage({ message }: Props) {
                   <button
                     key={`${c.type}:${c.id}`}
                     className="flex items-center gap-1.5 text-[11px] text-ink-400 hover:text-ink-300 hover:underline transition-colors text-left font-mono"
-                    onClick={() => openPdfModal(c.doc_id, c.pages[0])}
+                    onClick={() => openPdfModal(c.doc_id, c.pages[0] ?? 1)}
                     title={c.text_span}
                   >
                     <span className="text-stone-600 text-[10px]">[{idx + 1}]</span>
