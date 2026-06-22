@@ -74,6 +74,19 @@ class StorageService:
         blob = self._bucket.blob(blob_name)
         return blob.download_as_bytes(timeout=timeout)
 
+    def read_pdf_range(self, gcs_url: str, start: int, end: int) -> bytes:
+        blob_name = self._parse_blob_name(gcs_url)
+        blob = self._bucket.blob(blob_name)
+        return blob.download_as_bytes(start=start, end=end, timeout=300)
+
+    def get_pdf_size(self, gcs_url: str) -> int:
+        blob_name = self._parse_blob_name(gcs_url)
+        blob = self._bucket.blob(blob_name)
+        blob.reload(timeout=30)
+        if blob.size is None:
+            raise FileNotFoundError(f"PDF size unavailable for {gcs_url}")
+        return blob.size
+
     def download_json(self, path: str, timeout: int = 300) -> dict | list:
         """Download and parse a JSON object from *path* inside the bucket.
 

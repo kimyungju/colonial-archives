@@ -5,7 +5,7 @@ import json
 import logging
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import Response
 
 from app.config.settings import settings
@@ -23,6 +23,41 @@ def require_doc_id(doc_id: str) -> str:
     if not normalized:
         raise HTTPException(status_code=400, detail="doc_id is required")
     return normalized
+
+
+def range_not_satisfiable(total_size: int) -> HTTPException:
+    return HTTPException(
+        status_code=416,
+        detail="Requested range is not satisfiable",
+        headers={"Content-Range": f"bytes */{total_size}"},
+    )
+
+
+def parse_byte_range(range_header: str, total_size: int) -> tuple[int, int]:
+    if not range_header.startswith("bytes=") or "," in range_header:
+        raise range_not_satisfiable(total_size)
+
+    start_text, separator, end_text = range_header[len("bytes="):].partition("-")
+    if separator != "-":
+        raise range_not_satisfiable(total_size)
+
+    try:
+        if start_text == "":
+            suffix_length = int(end_text)
+            if suffix_length <= 0:
+                raise ValueError
+            start = max(total_size - suffix_length, 0)
+            end = total_size - 1
+        else:
+            start = int(start_text)
+            end = int(end_text) if end_text else total_size - 1
+    except ValueError as exc:
+        raise range_not_satisfiable(total_size) from exc
+
+    if start < 0 or start >= total_size or end < start:
+        raise range_not_satisfiable(total_size)
+
+    return start, min(end, total_size - 1)
 
 
 @router.post("/query", response_model=QueryResponse)
@@ -137,8 +172,39 @@ async def document_full_text(
     }
 
 
+@router.head("/document/proxy/{doc_id:path}")
+async def document_proxy_head(doc_id: str) -> Response:
+    doc_id = require_doc_id(doc_id)
+    pdf_url = storage_service.get_pdf_url(doc_id)
+
+    try:
+        pdf_size = await asyncio.get_event_loop().run_in_executor(
+            None, storage_service.get_pdf_size, pdf_url,
+        )
+    except Exception as exc:
+        logger.error("Failed to read PDF metadata for doc_id=%s: %s", doc_id, exc)
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document '{doc_id}' not found in storage.",
+        ) from exc
+
+    return Response(
+        content=b"",
+        media_type="application/pdf",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Disposition": f'inline; filename="{doc_id}.pdf"',
+            "Content-Length": str(pdf_size),
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
 @router.get("/document/proxy/{doc_id:path}")
-async def document_proxy(doc_id: str) -> Response:
+async def document_proxy(
+    doc_id: str,
+    range_header: str | None = Header(default=None, alias="Range"),
+) -> Response:
     """Stream a PDF from Cloud Storage through the backend.
 
     This is a fallback for when signed URL generation fails (e.g. local dev
@@ -148,9 +214,32 @@ async def document_proxy(doc_id: str) -> Response:
     pdf_url = storage_service.get_pdf_url(doc_id)
 
     try:
+        if range_header:
+            pdf_size = await asyncio.get_event_loop().run_in_executor(
+                None, storage_service.get_pdf_size, pdf_url,
+            )
+            start, end = parse_byte_range(range_header, pdf_size)
+            pdf_bytes = await asyncio.get_event_loop().run_in_executor(
+                None, storage_service.read_pdf_range, pdf_url, start, end,
+            )
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                status_code=206,
+                headers={
+                    "Accept-Ranges": "bytes",
+                    "Content-Range": f"bytes {start}-{end}/{pdf_size}",
+                    "Content-Length": str(len(pdf_bytes)),
+                    "Content-Disposition": f'inline; filename="{doc_id}.pdf"',
+                    "Cache-Control": "private, max-age=3600",
+                },
+            )
+
         pdf_bytes = await asyncio.get_event_loop().run_in_executor(
             None, storage_service.read_pdf_bytes, pdf_url,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Failed to proxy PDF for doc_id=%s: %s", doc_id, exc)
         raise HTTPException(
@@ -162,6 +251,7 @@ async def document_proxy(doc_id: str) -> Response:
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
+            "Accept-Ranges": "bytes",
             "Content-Disposition": f'inline; filename="{doc_id}.pdf"',
             "Cache-Control": "private, max-age=3600",
         },

@@ -37,7 +37,12 @@ export default function PdfModal() {
       try {
         const { url } = await apiClient.getSignedUrl(pdfModalProps.docId, pdfModalProps.page);
         const pdfUrl = url.startsWith("/document/") ? `${API_BASE}${url}` : url;
-        const doc = await pdfjsLib.getDocument(pdfUrl).promise;
+        const doc = await pdfjsLib.getDocument({
+          url: pdfUrl,
+          disableAutoFetch: true,
+          disableStream: true,
+          rangeChunkSize: 64 * 1024,
+        }).promise;
         if (cancelled) return;
 
         setPdfDoc(doc);
@@ -67,13 +72,16 @@ export default function PdfModal() {
       if (cancelled) return;
 
       const viewport = page.getViewport({ scale });
-      const canvas = canvasRef.current!;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
-      const ctx = canvas.getContext("2d")!;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+      const canvasContext = canvas.getContext("2d");
+      if (!canvasContext) return;
+
+      await page.render({ canvas, canvasContext, viewport }).promise;
     })();
 
     return () => {
