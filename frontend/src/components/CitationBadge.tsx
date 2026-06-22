@@ -1,5 +1,6 @@
 import type { Citation } from "../types";
 import { useAppStore } from "../stores/useAppStore";
+import { getArchivePdfTarget } from "../utils/citationTraceability";
 
 interface Props {
   citation: Citation;
@@ -9,13 +10,25 @@ export default function CitationBadge({ citation }: Props) {
   const openPdfModal = useAppStore((s) => s.openPdfModal);
 
   if (citation.type === "archive") {
+    const pdfTarget = getArchivePdfTarget(citation);
+    if (!pdfTarget) {
+      return (
+        <span
+          className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded text-xs font-medium bg-stone-700/30 text-stone-400 font-mono"
+          title={citation.text_span}
+        >
+          {citation.text_span || "Graph evidence"}
+        </span>
+      );
+    }
+
     return (
       <button
         className="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded text-xs font-medium bg-ink-500/20 text-ink-400 hover:bg-ink-500/30 transition-colors cursor-pointer font-mono"
         title={citation.text_span}
-        onClick={() => openPdfModal(citation.doc_id, citation.pages[0])}
+        onClick={() => openPdfModal(pdfTarget.docId, pdfTarget.page)}
       >
-        {citation.doc_id}:p{citation.pages.join(",")}
+        {pdfTarget.docId}:p{pdfTarget.page}
       </button>
     );
   }

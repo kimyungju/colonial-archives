@@ -595,16 +595,38 @@ class HybridRetrievalService:
             # Build context chunk from entity evidence for LLM grounding
             for node in subgraph.nodes:
                 if node.highlighted:
+                    evidence_text = (
+                        node.evidence_text_span.strip()
+                        if node.evidence_text_span
+                        else ""
+                    )
+                    text = evidence_text or (
+                        f"Entity: {node.name}. "
+                        + " ".join(
+                            f"{k}: {v}" for k, v in node.attributes.items()
+                        )
+                    )
+                    doc_id = (
+                        node.evidence_doc_id.strip()
+                        if node.evidence_doc_id
+                        else ""
+                    )
+                    pages = (
+                        [node.evidence_page]
+                        if node.evidence_page is not None and node.evidence_page > 0
+                        else []
+                    )
                     context_chunks.append(
                         {
                             "id": node.canonical_id,
-                            "text": f"Entity: {node.name}. "
-                            + " ".join(
-                                f"{k}: {v}" for k, v in node.attributes.items()
+                            "text": text,
+                            "doc_id": doc_id,
+                            "pages": pages,
+                            "confidence": (
+                                node.evidence_confidence
+                                if node.evidence_confidence is not None
+                                else 0.8
                             ),
-                            "doc_id": "",
-                            "pages": [],
-                            "confidence": 0.8,
                             "cite_type": "archive",
                         }
                     )

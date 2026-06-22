@@ -1,19 +1,33 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import type { Components } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import type { ChatMessage as ChatMessageType, Citation } from "../types";
+import { apiClient } from "../api/client";
 import { injectCitationHtml, extractUniqueCitations } from "../utils/parseCitations";
+import {
+  type ArchivePdfTarget,
+  extractEntityNameFromCitationText,
+  getArchivePdfTarget,
+  getArchivePdfTargetFromGraphNode,
+} from "../utils/citationTraceability";
 import { useAppStore } from "../stores/useAppStore";
 
 interface Props {
   message: ChatMessageType;
 }
 
+function getCitationResolutionKey(citation: Citation): string {
+  return `${citation.type}:${citation.id}:${citation.type === "archive" ? citation.text_span : ""}`;
+}
+
 export default function ChatMessage({ message }: Props) {
   const isUser = message.role === "user";
   const openPdfModal = useAppStore((s) => s.openPdfModal);
   const citations = useMemo(() => message.citations ?? [], [message.citations]);
+  const [resolvedPdfTargets, setResolvedPdfTargets] = useState<
+    Record<string, ArchivePdfTarget>
+  >({});
 
   // Build citation lookup map once
   const citationMap = useMemo(() => {
@@ -23,6 +37,73 @@ export default function ChatMessage({ message }: Props) {
     }
     return map;
   }, [citations]);
+
+  const entityCitationLookups = useMemo(() => {
+    const lookups: Array<{ key: string; entityName: string }> = [];
+    for (const citation of citations) {
+      if (citation.type !== "archive" || getArchivePdfTarget(citation)) {
+        continue;
+      }
+
+      const entityName = extractEntityNameFromCitationText(citation.text_span);
+      if (entityName) {
+        lookups.push({
+          key: getCitationResolutionKey(citation),
+          entityName,
+        });
+      }
+    }
+    return lookups;
+  }, [citations]);
+
+  useEffect(() => {
+    if (entityCitationLookups.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+    const currentKeys = new Set(entityCitationLookups.map(({ key }) => key));
+
+    Promise.allSettled(
+      entityCitationLookups.map(async ({ key, entityName }) => {
+        const nodes = await apiClient.searchGraph(entityName, 1);
+        const pdfTarget = nodes
+          .map((node) => getArchivePdfTargetFromGraphNode(node))
+          .find((target): target is ArchivePdfTarget => target !== null);
+        return { key, pdfTarget };
+      }),
+    ).then((results) => {
+      if (!isActive) return;
+
+      setResolvedPdfTargets((previous) => {
+        const next: Record<string, ArchivePdfTarget> = {};
+        for (const key of currentKeys) {
+          const existing = previous[key];
+          if (existing) next[key] = existing;
+        }
+
+        for (const result of results) {
+          if (result.status === "fulfilled" && result.value.pdfTarget) {
+            next[result.value.key] = result.value.pdfTarget;
+          }
+        }
+
+        return next;
+      });
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [entityCitationLookups]);
+
+  const getCitationPdfTarget = useCallback((citation: Citation): ArchivePdfTarget | null => {
+    const directTarget = getArchivePdfTarget(citation);
+    if (directTarget || citation.type !== "archive") return directTarget;
+    if (!extractEntityNameFromCitationText(citation.text_span)) return null;
+
+    return resolvedPdfTargets[getCitationResolutionKey(citation)] ?? null;
+  }, [resolvedPdfTargets]);
 
   // Deduplicated citations for sources footer (order of first appearance)
   const uniqueCitations = useMemo(
@@ -66,12 +147,24 @@ export default function ChatMessage({ message }: Props) {
         if (!citation) return <>{children}</>;
 
         if (citation.type === "archive") {
+          const pdfTarget = getCitationPdfTarget(citation);
+          if (!pdfTarget) {
+            return (
+              <span
+                className="inline-flex items-center bg-stone-700/35 text-stone-400 px-1 rounded text-[10px] font-mono ml-0.5 align-super leading-none"
+                title={citation.text_span}
+              >
+                [{children}]
+              </span>
+            );
+          }
+
           return (
             <button
               type="button"
               className="inline-flex items-center bg-ink-600/20 text-ink-400 hover:bg-ink-600/35 hover:text-ink-300 px-1 rounded text-[10px] font-mono cursor-pointer transition-colors ml-0.5 align-super leading-none"
-              title={`${citation.doc_id} p.${citation.pages.join(",")}`}
-              onClick={() => openPdfModal(citation.doc_id, citation.pages[0] ?? 1)}
+              title={`${pdfTarget.docId} p.${pdfTarget.page}`}
+              onClick={() => openPdfModal(pdfTarget.docId, pdfTarget.page)}
             >
               [{children}]
             </button>
@@ -92,7 +185,7 @@ export default function ChatMessage({ message }: Props) {
         );
       },
     }),
-    [citationMap, openPdfModal]
+    [citationMap, getCitationPdfTarget, openPdfModal]
   );
 
   if (isUser) {
@@ -121,19 +214,37 @@ export default function ChatMessage({ message }: Props) {
               {sourceLabel ?? "Sources"}
             </span>
             <div className="mt-1 flex flex-col gap-0.5">
-              {uniqueCitations.map((c, idx) =>
-                c.type === "archive" ? (
-                  <button
-                    key={`${c.type}:${c.id}`}
-                    className="flex items-center gap-1.5 text-[11px] text-ink-400 hover:text-ink-300 hover:underline transition-colors text-left font-mono"
-                    onClick={() => openPdfModal(c.doc_id, c.pages[0] ?? 1)}
-                    title={c.text_span}
-                  >
-                    <span className="text-stone-600 text-[10px]">[{idx + 1}]</span>
-                    <span>{c.doc_id}</span>
-                    <span className="text-stone-500">p.{c.pages.join(",")}</span>
-                  </button>
-                ) : (
+              {uniqueCitations.map((c, idx) => {
+                if (c.type === "archive") {
+                  const pdfTarget = getCitationPdfTarget(c);
+                  if (!pdfTarget) {
+                    return (
+                      <span
+                        key={`${c.type}:${c.id}`}
+                        className="flex items-center gap-1.5 text-[11px] text-stone-400 text-left font-mono"
+                        title={c.text_span}
+                      >
+                        <span className="text-stone-600 text-[10px]">[{idx + 1}]</span>
+                        <span>{c.text_span || "Graph evidence"}</span>
+                      </span>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={`${c.type}:${c.id}`}
+                      className="flex items-center gap-1.5 text-[11px] text-ink-400 hover:text-ink-300 hover:underline transition-colors text-left font-mono"
+                      onClick={() => openPdfModal(pdfTarget.docId, pdfTarget.page)}
+                      title={c.text_span}
+                    >
+                      <span className="text-stone-600 text-[10px]">[{idx + 1}]</span>
+                      <span>{pdfTarget.docId}</span>
+                      <span className="text-stone-500">p.{pdfTarget.page}</span>
+                    </button>
+                  );
+                }
+
+                return (
                   <a
                     key={`${c.type}:${c.id}`}
                     href={c.url}
@@ -145,8 +256,8 @@ export default function ChatMessage({ message }: Props) {
                     <span className="text-stone-600 text-[10px]">[{idx + 1}]</span>
                     <span>{c.title}</span>
                   </a>
-                )
-              )}
+                );
+              })}
             </div>
           </div>
         )}

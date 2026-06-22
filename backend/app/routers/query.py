@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["query"])
 
 
+def require_doc_id(doc_id: str) -> str:
+    normalized = doc_id.strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="doc_id is required")
+    return normalized
+
+
 @router.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest) -> QueryResponse:
     """Run a hybrid retrieval query and return the answer with citations."""
@@ -36,6 +43,7 @@ async def document_signed_url(
     If signed URL generation fails (e.g. running with user ADC credentials),
     falls back to a proxy URL that streams the PDF through the backend.
     """
+    doc_id = require_doc_id(doc_id)
     pdf_url = storage_service.get_pdf_url(doc_id)
 
     try:
@@ -136,6 +144,7 @@ async def document_proxy(doc_id: str) -> Response:
     This is a fallback for when signed URL generation fails (e.g. local dev
     with user ADC credentials that cannot sign blobs).
     """
+    doc_id = require_doc_id(doc_id)
     pdf_url = storage_service.get_pdf_url(doc_id)
 
     try:

@@ -175,6 +175,37 @@ class TestGraphSearchParallel:
             assert mock_neo4j.search_entities.call_count == 2
             assert mock_neo4j.get_subgraph.call_count == 2
 
+    @pytest.mark.asyncio
+    async def test_highlighted_node_context_keeps_evidence_pdf_target(self, service):
+        node = GraphNode(
+            canonical_id="entity_farm_rental",
+            name="farm rental",
+            main_categories=["Economic and Financial"],
+            attributes={"amount": "$82,669", "year": "1851-52"},
+            highlighted=True,
+            evidence_doc_id="CO 273:550:8",
+            evidence_page=7,
+            evidence_text_span="farm rental amount: $82,669 year: 1851-52",
+            evidence_confidence=0.91,
+        )
+        subgraph = GraphPayload(
+            nodes=[node],
+            edges=[],
+            center_node="entity_farm_rental",
+        )
+
+        with patch("app.services.hybrid_retrieval.neo4j_service") as mock_neo4j:
+            mock_neo4j.search_entities = AsyncMock(return_value=[node])
+            mock_neo4j.get_subgraph = AsyncMock(return_value=subgraph)
+
+            result = await service._graph_search(["farm rental"], None)
+
+        chunk = result["context_chunks"][0]
+        assert chunk["doc_id"] == "CO 273:550:8"
+        assert chunk["pages"] == [7]
+        assert chunk["text"] == "farm rental amount: $82,669 year: 1851-52"
+        assert chunk["confidence"] == pytest.approx(0.91)
+
 
     @pytest.mark.asyncio
     async def test_uses_multiple_seeds_per_hint(self, service):

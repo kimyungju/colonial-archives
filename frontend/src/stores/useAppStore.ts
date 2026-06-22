@@ -108,7 +108,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   openPdfModal(docId: string, page: number) {
-    set({ isPdfModalOpen: true, pdfModalProps: { docId, page } });
+    const normalizedDocId = docId.trim();
+    if (normalizedDocId.length === 0) return;
+
+    const normalizedPage = Number.isInteger(page) && page > 0 ? page : 1;
+    set({
+      isPdfModalOpen: true,
+      pdfModalProps: { docId: normalizedDocId, page: normalizedPage },
+    });
   },
 
   closePdfModal() {

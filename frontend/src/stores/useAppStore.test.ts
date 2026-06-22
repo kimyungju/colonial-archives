@@ -60,6 +60,13 @@ describe("useAppStore", () => {
     expect(state.pdfModalProps).toEqual({ docId: "doc_042", page: 5 });
   });
 
+  it("openPdfModal ignores blank document ids", () => {
+    useAppStore.getState().openPdfModal("", 1);
+    const state = useAppStore.getState();
+    expect(state.isPdfModalOpen).toBe(false);
+    expect(state.pdfModalProps).toBeNull();
+  });
+
   it("closePdfModal clears modal", () => {
     useAppStore.getState().openPdfModal("doc_042", 5);
     useAppStore.getState().closePdfModal();
