@@ -1,5 +1,6 @@
 """Tests for the graph overview endpoint and Neo4j service method."""
 
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -129,3 +130,71 @@ async def test_graph_overview_endpoint_returns_200(mock_gcp):
     assert "edges" in data
     assert data["nodes"][0]["connection_count"] == 3
     assert data["nodes"][0]["name"] == "Test Entity"
+
+
+@pytest.mark.asyncio
+async def test_graph_overview_returns_stale_cache_while_refreshing(mock_gcp):
+    stale_payload = GraphOverviewPayload(
+        nodes=[
+            OverviewNode(
+                canonical_id="stale",
+                name="Stale Entity",
+                main_categories=["General and Establishment"],
+                connection_count=1,
+            )
+        ],
+        edges=[],
+    )
+    fresh_payload = GraphOverviewPayload(
+        nodes=[
+            OverviewNode(
+                canonical_id="fresh",
+                name="Fresh Entity",
+                main_categories=["Economic and Financial"],
+                connection_count=2,
+            )
+        ],
+        edges=[],
+    )
+
+    from app.routers import graph
+
+    graph._overview_cache.clear()
+    graph._overview_refresh_task = None
+    graph._overview_cache["overview"] = (
+        time.time() - graph._CACHE_TTL_SECONDS - 1,
+        stale_payload,
+    )
+
+    created_coroutines = []
+
+    def fake_create_task(coro):
+        created_coroutines.append(coro)
+        coro.close()
+        task = MagicMock()
+        task.done.return_value = False
+        return task
+
+    from app.main import app
+
+    with (
+        patch(
+            "app.routers.graph.neo4j_service.get_overview_graph",
+            new_callable=AsyncMock,
+            return_value=fresh_payload,
+        ) as get_overview_graph,
+        patch("app.routers.graph.asyncio.create_task", side_effect=fake_create_task),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/graph/overview")
+
+    graph._overview_refresh_task = None
+    graph._overview_cache.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["nodes"][0]["canonical_id"] == "stale"
+    assert len(created_coroutines) == 1
+    assert get_overview_graph.await_count == 0

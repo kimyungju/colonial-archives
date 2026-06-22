@@ -24,6 +24,8 @@ from app.models.schemas import (
 
 logger = logging.getLogger(__name__)
 
+_SUBGRAPH_RELATIONSHIP_LIMIT = 120
+
 
 class Neo4jService:
     """Async Neo4j driver wrapper with MERGE-only write operations."""
@@ -174,33 +176,35 @@ class Neo4jService:
         canonical_id: str,
         depth: int | None = None,
         categories: list[str] | None = None,
+        limit: int = _SUBGRAPH_RELATIONSHIP_LIMIT,
     ) -> GraphPayload | None:
-        """Return the subgraph within *depth* hops of an entity.
+        """Return a bounded one-hop neighborhood around an entity.
 
-        Single-query implementation: centre, neighbours, and edges are
-        fetched in one Cypher round-trip. Returns None if the seed entity
-        does not exist.
-
-        Match direction is **outbound only** (`-[r]->`), unchanged from
-        the pre-plan implementation. The undirected widening (which is
-        a real recall bug fix) is handled separately in Task B3b so the
-        round-trip optimisation can be deployed and observed on its own.
-        Category filtering is applied in Python after the fetch; Task B3b
-        will push it into Cypher together with the directionality and
-        size-cap changes.
+        The graph explorer calls this on click, so the query intentionally
+        avoids variable-length traversal. Neo4j filters categories before the
+        limit, then returns compact row maps for payload assembly.
         """
-        if depth is None:
-            depth = settings.GRAPH_HOP_DEPTH
+        _ = depth
+        relationship_limit = max(1, min(limit, 300))
 
-        cypher = f"""
-        MATCH (center:Entity {{canonical_id: $canonical_id}})
-        OPTIONAL MATCH (center)-[r:RELATED_TO*1..{depth}]->(neighbor:Entity)
-        WITH center,
-             collect(DISTINCT neighbor) AS neighbors,
-             collect(DISTINCT r) AS rel_lists
-        RETURN center, neighbors, rel_lists
+        cypher = """
+        MATCH (center:Entity {canonical_id: $canonical_id})
+        OPTIONAL MATCH (center)-[r:RELATED_TO]-(neighbor:Entity)
+        WHERE neighbor IS NULL
+           OR size($categories) = 0
+           OR any(c IN coalesce(neighbor.main_categories, [])
+                  WHERE c IN $categories)
+        WITH center, neighbor, r
+        ORDER BY coalesce(r.evidence_confidence, 0) DESC,
+                 coalesce(neighbor.name, "")
+        WITH center, collect({neighbor: neighbor, rel: r})[..$limit] AS rows
+        RETURN center, rows
         """
-        params = {"canonical_id": canonical_id}
+        params = {
+            "canonical_id": canonical_id,
+            "categories": categories or [],
+            "limit": relationship_limit,
+        }
 
         async with self.driver.session() as session:
             result = await session.run(cypher, params)
@@ -214,59 +218,64 @@ class Neo4jService:
             canonical_id: self._record_to_graph_node(center_node, highlighted=True),
         }
 
-        for neighbor in record["neighbors"]:
+        rows = record["rows"] or []
+        relationships = []
+
+        for row in rows:
+            if row is None:
+                continue
+            neighbor = row.get("neighbor")
+            rel = row.get("rel")
             if neighbor is None:
                 continue
             nid = neighbor.get("canonical_id", "")
             if not nid or nid in nodes_map:
+                if rel is not None:
+                    relationships.append(rel)
                 continue
             node = self._record_to_graph_node(neighbor, highlighted=False)
-            if categories and not any(c in node.main_categories for c in categories):
-                continue
             nodes_map[nid] = node
+            if rel is not None:
+                relationships.append(rel)
 
         edges: list[GraphEdge] = []
         seen_edges: set[str] = set()
 
-        # rel_lists is list[list[Relationship]]; flatten and dedupe.
-        for rel_list in record["rel_lists"] or []:
-            if rel_list is None:
+        for rel in relationships:
+            if rel is None:
                 continue
-            for rel in rel_list:
-                if rel is None:
-                    continue
-                source_id = rel.start_node.get("canonical_id", "") if rel.start_node else ""
-                target_id = rel.end_node.get("canonical_id", "") if rel.end_node else ""
-                rel_type = rel.get("rel_type") or rel.type or "RELATED_TO"
+            source_id = rel.start_node.get("canonical_id", "") if rel.start_node else ""
+            target_id = rel.end_node.get("canonical_id", "") if rel.end_node else ""
+            rel_type = rel.get("rel_type") or rel.type or "RELATED_TO"
 
-                if source_id not in nodes_map or target_id not in nodes_map:
-                    continue
+            if source_id not in nodes_map or target_id not in nodes_map:
+                continue
 
-                edge_key = f"{source_id}-{rel_type}-{target_id}"
-                if edge_key in seen_edges:
-                    continue
-                seen_edges.add(edge_key)
+            edge_key = f"{source_id}-{rel_type}-{target_id}"
+            if edge_key in seen_edges:
+                continue
+            seen_edges.add(edge_key)
 
-                attrs: dict = {}
-                raw_attrs = rel.get("attributes")
-                if raw_attrs:
-                    try:
-                        attrs = json.loads(raw_attrs)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+            attrs: dict = {}
+            raw_attrs = rel.get("attributes")
+            if raw_attrs:
+                try:
+                    attrs = json.loads(raw_attrs)
+                except (json.JSONDecodeError, TypeError):
+                    pass
 
-                edges.append(
-                    GraphEdge(
-                        id=f"edge_{rel.element_id}",
-                        source=source_id,
-                        target=target_id,
-                        type=rel_type,
-                        attributes=attrs,
-                        highlighted=(
-                            source_id == canonical_id or target_id == canonical_id
-                        ),
-                    )
+            edges.append(
+                GraphEdge(
+                    id=f"edge_{rel.element_id}",
+                    source=source_id,
+                    target=target_id,
+                    type=rel_type,
+                    attributes=attrs,
+                    highlighted=(
+                        source_id == canonical_id or target_id == canonical_id
+                    ),
                 )
+            )
 
         return GraphPayload(
             nodes=list(nodes_map.values()),

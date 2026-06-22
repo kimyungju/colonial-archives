@@ -6,6 +6,7 @@ backed by Neo4j.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/graph", tags=["graph"])
 # In-memory cache for overview graph (changes infrequently)
 _overview_cache: dict[str, tuple[float, GraphOverviewPayload]] = {}
 _CACHE_TTL_SECONDS = 300  # 5 minutes
+_overview_refresh_task: asyncio.Task[None] | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,13 @@ async def prewarm_overview_cache() -> None:
         logger.info("Overview cache pre-warmed: %d nodes, %d edges", len(payload.nodes), len(payload.edges))
     except Exception:
         logger.warning("Overview cache pre-warm failed", exc_info=True)
+
+
+def _schedule_overview_refresh() -> None:
+    global _overview_refresh_task
+    if _overview_refresh_task is not None and not _overview_refresh_task.done():
+        return
+    _overview_refresh_task = asyncio.create_task(prewarm_overview_cache())
 
 
 @router.get("/overview", response_model=GraphOverviewPayload)
@@ -46,6 +55,8 @@ async def graph_overview() -> GraphOverviewPayload:
         cached_at, payload = _overview_cache[cache_key]
         if now - cached_at < _CACHE_TTL_SECONDS:
             return payload
+        _schedule_overview_refresh()
+        return payload
 
     payload = await neo4j_service.get_overview_graph()
     _overview_cache[cache_key] = (now, payload)
@@ -72,6 +83,7 @@ async def graph_search(
 async def get_entity(
     entity_canonical_id: str,
     categories: list[str] | None = Query(default=None),
+    limit: int = Query(default=120, ge=1, le=300),
 ) -> GraphPayload:
     """Get the subgraph surrounding an entity.
 
@@ -79,7 +91,7 @@ async def get_entity(
     Raises 404 if the entity does not exist.
     """
     payload = await neo4j_service.get_subgraph(
-        entity_canonical_id, categories=categories
+        entity_canonical_id, categories=categories, limit=limit
     )
     if payload is None:
         raise HTTPException(

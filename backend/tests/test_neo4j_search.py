@@ -1,5 +1,4 @@
-"""Tests for Neo4jService.get_subgraph behaviour after the round-trip
-consolidation in Task B3a."""
+"""Tests for Neo4jService graph search and bounded subgraph retrieval."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -30,8 +29,8 @@ async def test_get_subgraph_returns_none_for_missing_seed():
 
 
 @pytest.mark.asyncio
-async def test_get_subgraph_builds_payload_from_single_record():
-    """B3a contract: a populated record produces a GraphPayload with
+async def test_get_subgraph_builds_payload_from_bounded_one_hop_rows():
+    """A populated record produces a bounded one-hop GraphPayload with
     centre highlighted, neighbour entries, deduped edges, and edges
     correctly highlighted iff incident to the seed."""
     from unittest.mock import AsyncMock, MagicMock, patch
@@ -80,8 +79,10 @@ async def test_get_subgraph_builds_payload_from_single_record():
 
     fake_record = {
         "center": center_node,
-        "neighbors": [raffles_node],
-        "rel_lists": [[rel1, rel1_dup]],
+        "rows": [
+            {"neighbor": raffles_node, "rel": rel1},
+            {"neighbor": raffles_node, "rel": rel1_dup},
+        ],
     }
 
     fake_session = AsyncMock()
@@ -101,6 +102,12 @@ async def test_get_subgraph_builds_payload_from_single_record():
     ):
         payload = await svc.get_subgraph("singapore")
 
+    cypher, params = fake_session.run.await_args.args
+    assert "RELATED_TO*1.." not in cypher
+    assert "-[r:RELATED_TO]-" in cypher
+    assert params["categories"] == []
+    assert params["limit"] == 120
+
     assert payload is not None
     assert payload.center_node == "singapore"
     # Centre + one neighbour
@@ -117,6 +124,54 @@ async def test_get_subgraph_builds_payload_from_single_record():
     assert edge.type == "FOUNDED"
     # Highlighted because seed is one endpoint
     assert edge.highlighted is True
+
+
+@pytest.mark.asyncio
+async def test_get_subgraph_pushes_categories_and_limit_into_cypher():
+    """Category filters and the UI limit are applied before payload assembly."""
+    from app.services.neo4j_service import Neo4jService
+
+    svc = Neo4jService()
+    center_node = MagicMock()
+    center_node.get = lambda key, default=None: {
+        "canonical_id": "singapore",
+        "name": "Singapore",
+        "main_categories": ["Places"],
+        "attributes": "{}",
+    }.get(key, default)
+    center_node.items = lambda: {
+        "canonical_id": "singapore",
+        "name": "Singapore",
+        "main_categories": ["Places"],
+        "attributes": "{}",
+    }.items()
+
+    fake_record = {"center": center_node, "rows": []}
+    fake_result = AsyncMock()
+    fake_result.single = AsyncMock(return_value=fake_record)
+    fake_session = AsyncMock()
+    fake_session.run = AsyncMock(return_value=fake_result)
+
+    fake_session_ctx = AsyncMock()
+    fake_session_ctx.__aenter__.return_value = fake_session
+    fake_session_ctx.__aexit__.return_value = None
+    fake_driver = MagicMock()
+    fake_driver.session = MagicMock(return_value=fake_session_ctx)
+
+    with patch.object(
+        Neo4jService, "driver",
+        new_callable=lambda: property(lambda self: fake_driver),
+    ):
+        payload = await svc.get_subgraph(
+            "singapore",
+            categories=["Institutions"],
+            limit=2,
+        )
+
+    _, params = fake_session.run.await_args.args
+    assert params["categories"] == ["Institutions"]
+    assert params["limit"] == 2
+    assert payload is not None
 
 
 @pytest.mark.parametrize(
