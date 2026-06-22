@@ -1,0 +1,90 @@
+.sigma-graph-stage {
+  --sigma-controls-size: 36px;
+  --sigma-controls-margin: 12px;
+  --sigma-controls-background-color: color-mix(
+    in srgb,
+    var(--color-stone-100) 96%,
+    transparent
+  );
+  --sigma-controls-background-color-hover: var(--color-stone-200);
+  --sigma-controls-border-color: color-mix(
+    in srgb,
+    var(--color-stone-700) 72%,
+    transparent
+  );
+  --sigma-controls-color: var(--color-stone-950);
+}
+
+.sigma-graph-stage .react-sigma-controls {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--sigma-controls-border-color);
+  border-radius: 6px;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 28%);
+}
+
+.sigma-graph-stage .react-sigma-control {
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--sigma-controls-size);
+  height: var(--sigma-controls-size);
+  line-height: 1;
+  background-color: var(--sigma-controls-background-color);
+  border-bottom: 0;
+}
+
+.sigma-graph-stage .react-sigma-control:not(:last-child)::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  content: "";
+  background-color: var(--sigma-controls-border-color);
+  pointer-events: none;
+}
+
+.sigma-graph-stage .react-sigma-control > button {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  line-height: 1;
+  color: var(--sigma-controls-color);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  clip: auto;
+}
+
+.sigma-graph-stage .react-sigma-control > button:hover,
+.sigma-graph-stage .react-sigma-control > button:focus-visible {
+  background-color: var(--sigma-controls-background-color-hover);
+}
+
+.sigma-graph-stage .react-sigma-control > button:focus-visible {
+  outline: 2px solid var(--color-ink-400);
+  outline-offset: -2px;
+}
+
+.sigma-graph-stage .react-sigma-control > button > svg {
+  display: block;
+  width: 16px !important;
+  height: 16px;
+  margin: auto;
+  flex: none;
+}
+
+.sigma-graph-stage .sigma-overview-control {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}

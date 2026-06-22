@@ -3,7 +3,6 @@ import { useIsMobile } from "./hooks/useIsMobile";
 import ResizableSplitter from "./components/ResizableSplitter";
 import ChatPanel from "./components/ChatPanel";
 import GraphCanvas from "./components/GraphCanvas";
-import GraphLegend from "./components/GraphLegend";
 import NodeSidebar from "./components/NodeSidebar";
 import PdfModal from "./components/PdfModal";
 import AdminPanel from "./components/AdminPanel";
@@ -69,7 +68,6 @@ export default function App() {
           {mobileTab === "graph" ? (
             <div className="relative h-full bg-stone-900">
               <GraphCanvas />
-              <GraphLegend />
               <NodeSidebar />
             </div>
           ) : (
@@ -96,7 +94,6 @@ export default function App() {
         {/* Graph panel */}
         <div className="relative overflow-hidden bg-stone-900">
           <GraphCanvas />
-          <GraphLegend />
           <NodeSidebar />
         </div>
 

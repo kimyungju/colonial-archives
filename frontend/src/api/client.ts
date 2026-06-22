@@ -4,6 +4,7 @@ import type {
   SignedUrlResponse,
   PageTextResponse,
   GraphNode,
+  GraphPayload,
   GraphOverviewPayload,
 } from "../types";
 
@@ -122,6 +123,18 @@ export const apiClient = {
     return request<GraphOverviewPayload>(`${API_BASE}/graph/overview`, {
       method: "GET",
     });
+  },
+
+  getSubgraph(entityCanonicalId: string, categories?: string[]): Promise<GraphPayload> {
+    const params = new URLSearchParams();
+    if (categories?.length) {
+      categories.forEach((category) => params.append("categories", category));
+    }
+    const query = params.toString();
+    return request<GraphPayload>(
+      `${API_BASE}/graph/${encodeURIComponent(entityCanonicalId)}${query ? `?${query}` : ""}`,
+      { method: "GET" },
+    );
   },
 
   getDocumentText(

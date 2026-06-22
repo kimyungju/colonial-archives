@@ -1,15 +1,60 @@
+import { useMemo, useState } from "react";
+
+import { apiClient } from "../api/client";
+import { getNodeNeighborSummaries } from "../graph/graphModel";
 import { useAppStore } from "../stores/useAppStore";
 
 export default function NodeSidebar() {
   const selectedNode = useAppStore((s) => s.selectedNode);
   const isSidebarOpen = useAppStore((s) => s.isSidebarOpen);
+  const graphData = useAppStore((s) => s.graphData);
+  const overviewData = useAppStore((s) => s.overviewData);
   const selectNode = useAppStore((s) => s.selectNode);
+  const setGraphData = useAppStore((s) => s.setGraphData);
+  const setOverviewMode = useAppStore((s) => s.setOverviewMode);
   const setChatInput = useAppStore((s) => s.setChatInput);
   const openPdfModal = useAppStore((s) => s.openPdfModal);
+  const [loadingNeighborId, setLoadingNeighborId] = useState<string | null>(null);
+
+  const neighborSummaries = useMemo(() => {
+    if (!selectedNode) return [];
+    const selectedId = selectedNode.canonical_id;
+    if (graphData?.nodes.some((node) => node.canonical_id === selectedId)) {
+      return getNodeNeighborSummaries(
+        selectedId,
+        graphData.nodes,
+        graphData.edges,
+      ).slice(0, 14);
+    }
+    if (!overviewData) return [];
+    return getNodeNeighborSummaries(
+      selectedId,
+      overviewData.nodes,
+      overviewData.edges,
+    ).slice(0, 14);
+  }, [graphData, overviewData, selectedNode]);
 
   if (!isSidebarOpen || !selectedNode) return null;
 
   const attrs = selectedNode.attributes ?? {};
+  const evidenceDocId = selectedNode.evidence_doc_id;
+
+  async function openNeighborSubgraph(canonicalId: string): Promise<void> {
+    setLoadingNeighborId(canonicalId);
+    try {
+      const payload = await apiClient.getSubgraph(canonicalId);
+      setGraphData(payload);
+      setOverviewMode(false);
+      const nextNode =
+        payload.nodes.find((node) => node.canonical_id === canonicalId) ?? null;
+      selectNode(nextNode);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.warn(`[NodeSidebar] Could not load neighbor subgraph: ${message}`);
+    } finally {
+      setLoadingNeighborId(null);
+    }
+  }
 
   return (
     <div className="absolute top-0 right-0 h-full w-[300px] bg-stone-900 border-l border-stone-700/60 z-20 flex flex-col shadow-2xl animate-slide-in">
@@ -25,6 +70,7 @@ export default function NodeSidebar() {
         </div>
         <button
           onClick={() => selectNode(null)}
+          aria-label="Close node details"
           className="text-stone-400 hover:text-stone-200 ml-2 p-1 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,7 +124,37 @@ export default function NodeSidebar() {
           </div>
         )}
 
-        {selectedNode.evidence_doc_id && (
+        {neighborSummaries.length > 0 && (
+          <div>
+            <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-1.5">
+              Connected entities
+            </h3>
+            <div className="space-y-1.5">
+              {neighborSummaries.map((neighbor) => (
+                <button
+                  key={`${neighbor.direction}-${neighbor.relationship}-${neighbor.canonicalId}`}
+                  type="button"
+                  onClick={() => void openNeighborSubgraph(neighbor.canonicalId)}
+                  className="w-full rounded-md border border-stone-800 bg-stone-950/40 px-2 py-1.5 text-left transition-colors hover:border-stone-700 hover:bg-stone-800/60 focus:border-ink-400 focus:outline-none"
+                >
+                  <span className="block truncate text-xs text-stone-200">
+                    {neighbor.name}
+                  </span>
+                  <span className="mt-0.5 flex items-center justify-between gap-2 font-mono text-[10px] text-stone-500">
+                    <span className="truncate">{neighbor.relationship}</span>
+                    <span>
+                      {loadingNeighborId === neighbor.canonicalId
+                        ? "Loading"
+                        : neighbor.direction}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {evidenceDocId && (
           <div>
             <h3 className="text-xs font-medium text-stone-400 uppercase tracking-wider mb-1.5">
               Source Document
@@ -86,7 +162,7 @@ export default function NodeSidebar() {
             <button
               onClick={() =>
                 openPdfModal(
-                  selectedNode.evidence_doc_id!,
+                  evidenceDocId,
                   selectedNode.evidence_page ?? 1,
                 )
               }
@@ -109,7 +185,7 @@ export default function NodeSidebar() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-ink-400 group-hover:text-ink-300 transition-colors truncate">
-                  {selectedNode.evidence_doc_id}
+                  {evidenceDocId}
                 </p>
                 {selectedNode.evidence_page != null && (
                   <p className="text-xs text-stone-500">

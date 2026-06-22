@@ -99,6 +99,28 @@ describe("apiClient", () => {
     expect(url).toContain("categories=Defence+and+Military");
   });
 
+  it("getSubgraph fetches an entity neighborhood on demand", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          nodes: [],
+          edges: [],
+          center_node: "entity_raffles_001",
+        }),
+    });
+
+    const result = await apiClient.getSubgraph("entity_raffles_001", [
+      "General and Establishment",
+    ]);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/graph/entity_raffles_001?categories=General+and+Establishment",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(result.center_node).toBe("entity_raffles_001");
+  });
+
   it("throws on non-ok response", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,

@@ -1,501 +1,276 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import cytoscape from "cytoscape";
-import type { Core, EventObject } from "cytoscape";
-// @ts-expect-error — cytoscape-fcose has no type definitions
-import fcose from "cytoscape-fcose";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiClient } from "../api/client";
 import {
   CATEGORY_COLORS,
   DEFAULT_NODE_COLOR,
 } from "../constants/graphColors";
+import {
+  buildCommunityOverviewModel,
+  buildSubgraphModel,
+  entityNodeId,
+  explorerNodeToGraphNode,
+} from "../graph/graphModel";
+import type { ExplorerModel } from "../graph/graphModel";
 import { useAppStore } from "../stores/useAppStore";
-import type { GraphOverviewPayload, OverviewNode } from "../types";
+import type { GraphNode, GraphOverviewPayload } from "../types";
+import {
+  EmptyGraphState,
+  ErrorGraphState,
+  LoadingGraphState,
+} from "./GraphCanvasStates";
+import GraphExplorerControls from "./GraphExplorerControls";
+import type { CommunityControl } from "./GraphExplorerControls";
+import SigmaGraphStage from "./SigmaGraphStage";
 
-cytoscape.use(fcose);
+const MAX_OVERVIEW_RETRIES = 5;
+const OVERVIEW_RETRY_DELAY_MS = 3_000;
+const UNCATEGORIZED = "Uncategorized";
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
+function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Unknown error";
+}
 
-function nodeSize(connectionCount: number, isOverview: boolean): number {
-  if (isOverview) {
-    return Math.max(20, Math.min(70, 14 + Math.sqrt(connectionCount) * 8));
+function firstCategory(categories: readonly string[]): string {
+  return categories[0] ?? UNCATEGORIZED;
+}
+
+function buildCommunityControls(
+  overviewData: GraphOverviewPayload | null,
+  hiddenCategories: ReadonlySet<string>,
+  focusedCategory: string | null,
+): readonly CommunityControl[] {
+  const counts = new Map<string, number>();
+  for (const node of overviewData?.nodes ?? []) {
+    const category = firstCategory(node.main_categories);
+    counts.set(category, (counts.get(category) ?? 0) + 1);
   }
-  return Math.max(16, Math.min(50, 10 + Math.sqrt(connectionCount) * 6));
+
+  const names = new Set<string>([
+    ...Object.keys(CATEGORY_COLORS),
+    ...counts.keys(),
+  ]);
+
+  return [...names]
+    .map((name) => ({
+      name,
+      color: CATEGORY_COLORS[name] ?? DEFAULT_NODE_COLOR,
+      count: counts.get(name) ?? 0,
+      hidden: hiddenCategories.has(name),
+      focused: focusedCategory === name,
+    }))
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.name.localeCompare(right.name),
+    );
 }
 
-function labelThreshold(nodes: OverviewNode[], isOverview: boolean): number {
-  if (nodes.length === 0) return 0;
-  const percentile = isOverview ? 0.82 : 0.4;
-  const sorted = [...nodes]
-    .map((n) => n.connection_count)
-    .sort((a, b) => a - b);
-  const idx = Math.floor(sorted.length * percentile);
-  return sorted[Math.min(idx, sorted.length - 1)];
+function findNode(model: ExplorerModel, nodeId: string) {
+  return model.nodes.find((node) => node.id === nodeId) ?? null;
 }
-
-/* ------------------------------------------------------------------ */
-/*  Component                                                          */
-/* ------------------------------------------------------------------ */
 
 export default function GraphCanvas() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const cyRef = useRef<Core | null>(null);
-  const [overviewError, setOverviewError] = useState(false);
+  const graphData = useAppStore((state) => state.graphData);
+  const overviewData = useAppStore((state) => state.overviewData);
+  const isOverviewMode = useAppStore((state) => state.isOverviewMode);
+  const hiddenCategories = useAppStore((state) => state.hiddenCategories);
+  const selectedNode = useAppStore((state) => state.selectedNode);
+  const selectNode = useAppStore((state) => state.selectNode);
+  const setGraphData = useAppStore((state) => state.setGraphData);
+  const setOverviewData = useAppStore((state) => state.setOverviewData);
+  const setOverviewMode = useAppStore((state) => state.setOverviewMode);
+  const toggleCategory = useAppStore((state) => state.toggleCategory);
+
+  const [overviewError, setOverviewError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [forceRender, setForceRender] = useState(0);
+  const [fetchToken, setFetchToken] = useState(0);
+  const [focusedCategory, setFocusedCategory] = useState<string | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const [visualSelectionId, setVisualSelectionId] = useState<string | null>(null);
+  const [isLoadingSubgraph, setIsLoadingSubgraph] = useState(false);
+  const [subgraphError, setSubgraphError] = useState<string | null>(null);
 
-  // Store state
-  const graphData = useAppStore((s) => s.graphData);
-  const overviewData = useAppStore((s) => s.overviewData);
-  const isOverviewMode = useAppStore((s) => s.isOverviewMode);
-  const hiddenCategories = useAppStore((s) => s.hiddenCategories);
-  const selectNode = useAppStore((s) => s.selectNode);
-  const setOverviewData = useAppStore((s) => s.setOverviewData);
-  const setOverviewMode = useAppStore((s) => s.setOverviewMode);
-
-  // ---- Fetch overview on mount (with retry for Neo4j cold-start) ----
   useEffect(() => {
     let cancelled = false;
-    let retries = 0;
-    const maxRetries = 5;
-    const retryDelayMs = 3000;
+    let timeoutId: number | null = null;
 
-    const fetchOverview = () => {
-      apiClient
-        .getOverview()
-        .then((data) => {
-          if (!cancelled) {
-            setOverviewData(data);
-            setOverviewError(false);
-            setRetryCount(0);
-          }
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          console.warn(`[GraphCanvas] Overview fetch failed (attempt ${retries + 1}/${maxRetries + 1}):`, err);
-          if (retries < maxRetries) {
-            retries++;
-            if (!cancelled) setRetryCount(retries);
-            setTimeout(fetchOverview, retryDelayMs);
-          } else {
-            setOverviewError(true);
-            setRetryCount(0);
-          }
-        });
-    };
-
-    fetchOverview();
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ---- Determine which data to display ----
-  const activeData = useMemo(() => {
-    if (!isOverviewMode && graphData) {
-      // Build a lookup for real connection_count from overview data
-      const ccLookup = new Map<string, number>();
-      if (overviewData) {
-        for (const n of overviewData.nodes) {
-          ccLookup.set(n.canonical_id, n.connection_count);
+    async function fetchOverview(attempt: number): Promise<void> {
+      try {
+        const data = await apiClient.getOverview();
+        if (cancelled) return;
+        setOverviewData(data);
+        setOverviewError(null);
+        setRetryCount(0);
+      } catch (err) {
+        if (cancelled) return;
+        const message = toErrorMessage(err);
+        console.warn(
+          `[GraphCanvas] Overview fetch failed (attempt ${attempt + 1}/${MAX_OVERVIEW_RETRIES + 1}): ${message}`,
+        );
+        if (attempt < MAX_OVERVIEW_RETRIES) {
+          setRetryCount(attempt + 1);
+          timeoutId = window.setTimeout(() => {
+            void fetchOverview(attempt + 1);
+          }, OVERVIEW_RETRY_DELAY_MS);
+          return;
         }
+        setOverviewError(message);
+        setRetryCount(0);
       }
-
-      // Query mode — convert GraphPayload nodes to OverviewNode shape
-      return {
-        nodes: graphData.nodes.map((n) => ({
-          canonical_id: n.canonical_id,
-          name: n.name,
-          main_categories: n.main_categories,
-          sub_category: n.sub_category,
-          connection_count: ccLookup.get(n.canonical_id) ?? 1,
-          evidence_doc_id: n.evidence_doc_id ?? null,
-          evidence_page: n.evidence_page ?? null,
-        })),
-        edges: graphData.edges,
-      } satisfies GraphOverviewPayload;
     }
-    return overviewData;
-  }, [isOverviewMode, graphData, overviewData]);
 
-  // ---- Compute label threshold ----
-  const isLargeNodeSet = (activeData?.nodes.length ?? 0) > 50;
-  const threshold = useMemo(
-    () => (activeData ? labelThreshold(activeData.nodes, isOverviewMode || isLargeNodeSet) : 0),
-    [activeData, isOverviewMode, isLargeNodeSet],
+    void fetchOverview(0);
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [fetchToken, setOverviewData]);
+
+  const model = useMemo(() => {
+    if (!isOverviewMode && graphData) {
+      return buildSubgraphModel(graphData, { hiddenCategories });
+    }
+    if (!overviewData) return null;
+    return buildCommunityOverviewModel(overviewData, {
+      hiddenCategories,
+      focusedCategory,
+    });
+  }, [focusedCategory, graphData, hiddenCategories, isOverviewMode, overviewData]);
+
+  const communities = useMemo(
+    () => buildCommunityControls(overviewData, hiddenCategories, focusedCategory),
+    [focusedCategory, hiddenCategories, overviewData],
   );
 
-  // ---- Build Cytoscape elements ----
-  const elements = useMemo(() => {
-    if (!activeData) return [];
+  const selectedNodeId = selectedNode
+    ? entityNodeId(selectedNode.canonical_id)
+    : visualSelectionId;
 
-    // Cap overview to top N most-connected nodes; backend returns them sorted DESC.
-    // Reduces fcose layout compute from O(n²) on 1959 nodes to a manageable set.
-    const MAX_OVERVIEW_NODES = 350;
-    const visibleNodes = isOverviewMode
-      ? activeData.nodes.slice(0, MAX_OVERVIEW_NODES)
-      : activeData.nodes;
+  const loadEntitySubgraph = useCallback(
+    async (entityId: string, fallbackNode: GraphNode | null): Promise<void> => {
+      setIsLoadingSubgraph(true);
+      setSubgraphError(null);
+      setVisualSelectionId(entityNodeId(entityId));
+      if (fallbackNode) selectNode(fallbackNode);
 
-    const candidateNodes = visibleNodes.filter(
-      (n) =>
-        (!isOverviewMode || n.connection_count > 1) &&
-        (!n.main_categories.length ||
-          !n.main_categories.every((c) => hiddenCategories.has(c))),
-    );
-
-    const candidateIds = new Set(candidateNodes.map((n) => n.canonical_id));
-
-    // Filter edges first — both endpoints must be in candidate set
-    const filteredEdges = activeData.edges.filter(
-      (e) => candidateIds.has(e.source) && candidateIds.has(e.target),
-    );
-
-    // In overview, drop orphan nodes (no edges in the visible subset) — they
-    // drift to canvas edges and skew the bounding box used by fit()
-    const connectedIds = new Set<string>();
-    for (const e of filteredEdges) {
-      connectedIds.add(e.source);
-      connectedIds.add(e.target);
-    }
-
-    const finalNodes = isOverviewMode
-      ? candidateNodes.filter((n) => connectedIds.has(n.canonical_id))
-      : candidateNodes;
-
-    const nodeEls = finalNodes.map((n) => ({
-      data: {
-        id: n.canonical_id,
-        label: n.name,
-        main_categories: n.main_categories[0] ?? "",
-        sub_category: n.sub_category ?? "",
-        connection_count: n.connection_count,
-        size: nodeSize(n.connection_count, isOverviewMode || isLargeNodeSet),
-        evidence_doc_id: n.evidence_doc_id ?? null,
-        evidence_page: n.evidence_page ?? null,
-      },
-    }));
-
-    const edgeEls = filteredEdges.map((e) => ({
-      data: {
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        type: e.type,
-      },
-    }));
-
-    return [...nodeEls, ...edgeEls];
-  }, [activeData, hiddenCategories, isOverviewMode]);
-
-  // ---- Initialize Cytoscape ----
-  useEffect(() => {
-    if (!containerRef.current || elements.length === 0) return;
-
-    // Guard against zero-size container (not yet laid out by browser)
-    const rect = containerRef.current.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-      const raf = requestAnimationFrame(() => {
-        setForceRender((n) => n + 1);
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-
-    // ---- Mode-aware layout parameters ----
-    const useOverviewLayout = isOverviewMode || elements.length > 50;
-    const layoutOptions = useOverviewLayout
-      ? {
-          name: "fcose",
-          quality: "default" as const,
-          randomize: true,
-          animate: true,
-          animationDuration: 800,
-          fit: false,
-          padding: 100,
-          nodeSeparation: 450,
-          tile: true,
-          packComponents: true,
-          gravity: 0.25,
-          gravityRange: 6.0,
-          gravityCompound: 1.0,
-          gravityRangeCompound: 1.5,
-          edgeElasticity: 0.08,
-          numIter: 2500,
-          idealEdgeLength: ((edge: cytoscape.EdgeSingular) => {
-            const src = edge.source().data("main_categories");
-            const tgt = edge.target().data("main_categories");
-            return src === tgt ? 250 : 520;
-          }) as unknown as number,
-          nodeRepulsion: ((node: cytoscape.NodeSingular) => {
-            const cc = node.data("connection_count") as number;
-            if (cc > 10) return 180000;
-            if (cc > 3) return 90000;
-            return 45000;
-          }) as unknown as number,
-        }
-      : {
-          name: "fcose",
-          quality: "proof" as const,
-          randomize: true,
-          animate: true,
-          animationDuration: 600,
-          fit: false,
-          padding: 40,
-          nodeSeparation: 100,
-          tile: true,
-          packComponents: true,
-          gravity: 0.25,
-          idealEdgeLength: ((edge: cytoscape.EdgeSingular) => {
-            const src = edge.source().data("main_categories");
-            const tgt = edge.target().data("main_categories");
-            return src === tgt ? 100 : 200;
-          }) as unknown as number,
-          nodeRepulsion: ((node: cytoscape.NodeSingular) => {
-            const cc = node.data("connection_count") as number;
-            return cc > 5 ? 10000 : 5000;
-          }) as unknown as number,
-        };
-
-    // ---- Edge style based on mode ----
-    const edgeWidth = useOverviewLayout ? 0.5 : 1.5;
-    const edgeOpacity = useOverviewLayout ? 0.15 : 0.4;
-    const edgeArrowScale = useOverviewLayout ? 0.3 : 0.5;
-
-    const cy = cytoscape({
-      container: containerRef.current,
-      elements,
-      style: [
-        {
-          selector: "node",
-          style: {
-            "background-color": ((ele: cytoscape.NodeSingular) => {
-              const cat = ele.data("main_categories") as string;
-              return CATEGORY_COLORS[cat] ?? DEFAULT_NODE_COLOR;
-            }) as unknown as string,
-            "background-opacity": 0.9,
-            width: ((ele: cytoscape.NodeSingular) =>
-              ele.data("size")) as unknown as number,
-            height: ((ele: cytoscape.NodeSingular) =>
-              ele.data("size")) as unknown as number,
-            label: ((ele: cytoscape.NodeSingular) =>
-              ele.data("connection_count") >= threshold
-                ? ele.data("label")
-                : "") as unknown as string,
-            color: "#E5E7EB",
-            "font-size": ((ele: cytoscape.NodeSingular) => {
-              const cc = ele.data("connection_count") as number;
-              if (cc > 10) return "13px";
-              if (cc > 3) return "11px";
-              return "9px";
-            }) as unknown as string,
-            "font-family": "Plus Jakarta Sans, system-ui, sans-serif",
-            "text-valign": "bottom",
-            "text-margin-y": 5,
-            "text-background-color": "#1C1917",
-            "text-background-opacity": 0.7,
-            "text-background-padding": "3px",
-            "text-max-width": "120px",
-            "text-wrap": "ellipsis",
-            "border-width": ((ele: cytoscape.NodeSingular) => {
-              const cc = ele.data("connection_count") as number;
-              if (cc > 8) return 3;
-              if (cc > 3) return 2;
-              return 0;
-            }) as unknown as number,
-            "border-color": ((ele: cytoscape.NodeSingular) => {
-              const cat = ele.data("main_categories") as string;
-              return CATEGORY_COLORS[cat] ?? DEFAULT_NODE_COLOR;
-            }) as unknown as string,
-            "border-opacity": 0.3,
-          },
-        },
-        {
-          selector: "edge",
-          style: {
-            width: edgeWidth,
-            "line-color": "#4B5563",
-            opacity: edgeOpacity,
-            "curve-style": "bezier",
-            "target-arrow-shape": "triangle",
-            "target-arrow-color": "#4B5563",
-            "arrow-scale": edgeArrowScale,
-          },
-        },
-        {
-          selector: "node:active",
-          style: {
-            "overlay-opacity": 0,
-          },
-        },
-      ],
-      layout: layoutOptions as cytoscape.LayoutOptions,
-      minZoom: 0.05,
-      maxZoom: 4,
-      wheelSensitivity: 0.3,
-    });
-
-    // ---- Zoom-to-fit after layout completes ----
-    cy.one("layoutstop", () => {
-      // Defer to next frame so the browser finishes any pending layout work,
-      // then re-read container dimensions and fit. This fixes off-center
-      // positioning when the container size changes after cytoscape init.
-      requestAnimationFrame(() => {
-        if (!cyRef.current) return;
-        cyRef.current.resize();
-        const padding = useOverviewLayout ? 80 : 30;
-        cyRef.current.fit(cyRef.current.elements(), padding);
-        cyRef.current.center(cyRef.current.elements());
-      });
-    });
-
-    // ---- Re-fit when container size changes (splitter drag, window resize) ----
-    const resizeObserver = new ResizeObserver(() => {
-      if (!cyRef.current) return;
-      cyRef.current.resize();
-      cyRef.current.fit(cyRef.current.elements(), useOverviewLayout ? 80 : 30);
-    });
-    resizeObserver.observe(containerRef.current);
-
-    // ---- Events ----
-    cy.on("tap", "node", (evt: EventObject) => {
-      const nodeData = evt.target.data();
-      selectNode({
-        canonical_id: nodeData.id,
-        name: nodeData.label,
-        main_categories: nodeData.main_categories
-          ? [nodeData.main_categories]
-          : [],
-        sub_category: nodeData.sub_category || null,
-        attributes: {},
-        highlighted: true,
-        evidence_doc_id: nodeData.evidence_doc_id ?? null,
-        evidence_page: nodeData.evidence_page ?? null,
-        evidence_text_span: null,
-        evidence_confidence: null,
-      });
-    });
-
-    cy.on("tap", (evt: EventObject) => {
-      if (evt.target === cy) selectNode(null);
-    });
-
-    // Hover: show label on mouseover
-    cy.on("mouseover", "node", (evt: EventObject) => {
-      const node = evt.target;
-      node.style("label", node.data("label"));
-      node.style("border-width", 2);
-      node.style("border-color", "#d4ad6a");
-      if (containerRef.current) containerRef.current.style.cursor = "pointer";
-    });
-
-    cy.on("mouseout", "node", (evt: EventObject) => {
-      const node = evt.target;
-      if (node.data("connection_count") < threshold) {
-        node.style("label", "");
+      try {
+        const payload = await apiClient.getSubgraph(entityId);
+        const nextSelected =
+          payload.nodes.find((node) => node.canonical_id === entityId) ??
+          fallbackNode;
+        setGraphData(payload);
+        setOverviewMode(false);
+        setFocusedCategory(null);
+        if (nextSelected) selectNode(nextSelected);
+      } catch (err) {
+        setSubgraphError(toErrorMessage(err));
+      } finally {
+        setIsLoadingSubgraph(false);
       }
-      // Restore hub borders instead of resetting to 0
-      const cc = node.data("connection_count") as number;
-      node.style("border-width", cc > 8 ? 3 : cc > 3 ? 2 : 0);
-      node.style(
-        "border-color",
-        CATEGORY_COLORS[node.data("main_categories") as string] ??
-          DEFAULT_NODE_COLOR,
-      );
-      if (containerRef.current) containerRef.current.style.cursor = "default";
-    });
+    },
+    [selectNode, setGraphData, setOverviewMode],
+  );
 
-    cyRef.current = cy;
+  const handleNodeClick = useCallback(
+    (nodeId: string) => {
+      if (!model) return;
+      const node = findNode(model, nodeId);
+      if (!node) return;
+      setVisualSelectionId(nodeId);
 
-    return () => {
-      resizeObserver.disconnect();
-      cy.destroy();
-      cyRef.current = null;
-    };
-  }, [elements, threshold, selectNode, isOverviewMode, forceRender]);
+      if (node.kind === "community") {
+        selectNode(null);
+        setFocusedCategory((current) =>
+          current === node.community ? null : node.community,
+        );
+        return;
+      }
 
-  // ---- Reset to overview ----
-  const handleResetToOverview = useCallback(() => {
+      const graphNode = explorerNodeToGraphNode(node);
+      if (!node.entityId || !graphNode) return;
+      void loadEntitySubgraph(node.entityId, graphNode);
+    },
+    [loadEntitySubgraph, model, selectNode],
+  );
+
+  const handleStageClick = useCallback(() => {
+    setVisualSelectionId(null);
+    setHoveredNodeId(null);
+    selectNode(null);
+  }, [selectNode]);
+
+  const handleResetOverview = useCallback(() => {
+    setGraphData(null);
     setOverviewMode(true);
-  }, [setOverviewMode]);
+    setFocusedCategory(null);
+    setVisualSelectionId(null);
+    setSubgraphError(null);
+    selectNode(null);
+  }, [selectNode, setGraphData, setOverviewMode]);
 
-  // ---- Loading state ----
-  if (!activeData && !overviewError) {
+  const handleSearch = useCallback(
+    (query: string) => apiClient.searchGraph(query, 8),
+    [],
+  );
+
+  const handleSearchResult = useCallback(
+    (node: GraphNode) => {
+      void loadEntitySubgraph(node.canonical_id, node);
+    },
+    [loadEntitySubgraph],
+  );
+
+  if (!overviewData && !overviewError) {
+    return <LoadingGraphState retryCount={retryCount} />;
+  }
+
+  if (!overviewData && overviewError) {
     return (
-      <div className="flex h-full items-center justify-center bg-stone-900">
-        <div className="text-center animate-fade-in">
-          <div className="relative w-24 h-24 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-full border border-stone-700/40 animate-ping" style={{ animationDuration: "3s" }} />
-            <div className="absolute inset-3 rounded-full border border-stone-600/30 animate-ping" style={{ animationDuration: "2.5s", animationDelay: "0.5s" }} />
-            <div className="absolute inset-6 rounded-full border border-stone-500/20 animate-ping" style={{ animationDuration: "2s", animationDelay: "1s" }} />
-            <div className="absolute inset-[2.25rem] rounded-full bg-ink-500/20" />
-          </div>
-          <p className="text-sm text-stone-400 font-display">Loading knowledge graph&hellip;</p>
-          <p className="text-xs text-stone-600 mt-1">
-            {retryCount > 0
-              ? `Waking up database\u2026 attempt ${retryCount + 1} of 6`
-              : "Connecting to archive database"}
-          </p>
-        </div>
-      </div>
+      <ErrorGraphState
+        message={overviewError}
+        onRetry={() => {
+          setOverviewError(null);
+          setFetchToken((token) => token + 1);
+        }}
+      />
     );
   }
 
-  // ---- Error state ----
-  if (overviewError && !activeData) {
-    return (
-      <div className="flex h-full items-center justify-center bg-stone-900">
-        <div className="text-center animate-fade-in">
-          <div className="text-3xl mb-3 text-stone-600">&#x26A0;</div>
-          <p className="font-display text-base text-stone-300 mb-1">Could not load knowledge graph</p>
-          <p className="text-xs text-stone-500 mb-4">The archive database may be waking up from sleep.</p>
-          <button
-            onClick={() => {
-              setOverviewError(false);
-              setRetryCount(0);
-              let retries = 0;
-              const maxRetries = 5;
-              const attempt = () => {
-                apiClient
-                  .getOverview()
-                  .then((data) => {
-                    setOverviewData(data);
-                    setRetryCount(0);
-                  })
-                  .catch(() => {
-                    if (retries < maxRetries) {
-                      retries++;
-                      setRetryCount(retries);
-                      setTimeout(attempt, 3000);
-                    } else {
-                      setOverviewError(true);
-                      setRetryCount(0);
-                    }
-                  });
-              };
-              attempt();
-            }}
-            className="px-4 py-2 text-sm rounded-md bg-stone-800 border border-stone-700 text-stone-300 hover:bg-stone-700 hover:text-stone-100 transition-colors"
-          >
-            Retry Connection
-          </button>
-        </div>
-      </div>
-    );
+  if (!model || model.nodes.length === 0) {
+    return <EmptyGraphState onClearFocus={() => setFocusedCategory(null)} />;
   }
 
   return (
-    <div className="relative h-full w-full bg-stone-900">
-      {/* Cytoscape container */}
-      <div ref={containerRef} className="h-full w-full" />
-
-      {/* Reset button (visible in query mode) */}
-      {!isOverviewMode && (
-        <button
-          onClick={handleResetToOverview}
-          className="absolute top-3 right-3 z-10 rounded-md bg-stone-800/90 backdrop-blur-sm border border-stone-700/50 px-3 py-1.5 text-xs text-stone-300 hover:bg-stone-700 hover:text-stone-100 transition-colors"
-        >
-          Show Full Graph
-        </button>
-      )}
+    <div className="relative h-full w-full overflow-hidden bg-stone-900">
+      <div
+        className={`absolute inset-y-0 left-0 transition-[right] duration-200 ease-in-out ${
+          selectedNode ? "right-0 md:right-[300px]" : "right-0"
+        }`}
+      >
+        <SigmaGraphStage
+          model={model}
+          selectedNodeId={selectedNodeId}
+          hoveredNodeId={hoveredNodeId}
+          onHoverNode={setHoveredNodeId}
+          onNodeClick={handleNodeClick}
+          onStageClick={handleStageClick}
+          onResetOverview={handleResetOverview}
+        />
+      </div>
+      <GraphExplorerControls
+        communities={communities}
+        mode={model.mode}
+        visibleEntities={model.stats.visibleEntities}
+        totalEntities={model.stats.totalEntities}
+        visibleEdges={model.stats.visibleEdges}
+        isLoadingSubgraph={isLoadingSubgraph}
+        subgraphError={subgraphError}
+        onSearch={handleSearch}
+        onSelectSearchResult={handleSearchResult}
+        onToggleCategory={toggleCategory}
+        onFocusCategory={setFocusedCategory}
+        onResetOverview={handleResetOverview}
+      />
     </div>
   );
 }
