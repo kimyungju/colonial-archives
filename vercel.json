@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "build": {
+    "env": {
+      "VITE_API_BASE_URL": "https://colonial-archives-backend-production.up.railway.app"
+    }
+  },
+  "buildCommand": "cd frontend && npm run build",
+  "installCommand": "cd frontend && npm ci",
+  "outputDirectory": "frontend/dist"
+}

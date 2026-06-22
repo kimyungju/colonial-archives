@@ -18,4 +18,4 @@ USER appuser
 
 EXPOSE 8080
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "if [ -n \"$GOOGLE_APPLICATION_CREDENTIALS_JSON\" ]; then printf '%s' \"$GOOGLE_APPLICATION_CREDENTIALS_JSON\" > /tmp/gcp-credentials.json && export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-credentials.json; fi; uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

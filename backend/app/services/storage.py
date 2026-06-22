@@ -6,10 +6,14 @@ import datetime
 import json
 import logging
 from pathlib import PurePosixPath
+from typing import TYPE_CHECKING
 
 from google.cloud import storage
 
 from app.config.settings import settings
+
+if TYPE_CHECKING:
+    from google.cloud.storage.bucket import Bucket
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +22,27 @@ class StorageService:
     """Thin wrapper around ``google.cloud.storage`` scoped to one bucket."""
 
     def __init__(self) -> None:
-        self._client = storage.Client(project=settings.GCP_PROJECT_ID)
-        self._bucket = self._client.bucket(settings.CLOUD_STORAGE_BUCKET)
+        self._client: storage.Client | None = None
+        self._bucket_cache: Bucket | None = None
+
+    @property
+    def _bucket(self) -> Bucket:
+        if self._bucket_cache is None:
+            self._bucket_cache = self._get_client().bucket(settings.CLOUD_STORAGE_BUCKET)
+        return self._bucket_cache
+
+    @_bucket.setter
+    def _bucket(self, bucket: Bucket) -> None:
+        self._bucket_cache = bucket
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _get_client(self) -> storage.Client:
+        if self._client is None:
+            self._client = storage.Client(project=settings.GCP_PROJECT_ID)
+        return self._client
 
     @staticmethod
     def _parse_blob_name(gcs_url: str) -> str:
