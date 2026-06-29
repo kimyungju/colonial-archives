@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+from google.api_core.exceptions import ResourceExhausted
 import vertexai
 from vertexai.generative_models import GenerationConfig, GenerativeModel
 
@@ -44,6 +45,8 @@ Rules:
 User question: {question}"""
 
 FALLBACK_ANSWER = "I cannot answer this based on the available sources."
+MAX_GEMINI_RETRIES = 3
+RETRY_BASE_DELAY_S = 2.0
 
 
 class LlmService:
@@ -125,20 +128,40 @@ class LlmService:
             max_output_tokens=2048,
         )
 
-        try:
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.model.generate_content(
-                    prompt,
-                    generation_config=generation_config,
-                ),
-            )
-        except Exception:
-            logger.exception("Gemini generate_content call failed")
-            return {
-                "answer": FALLBACK_ANSWER,
-                "context_chunks": context_chunks,
-            }
+        for attempt in range(MAX_GEMINI_RETRIES + 1):
+            try:
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: self.model.generate_content(
+                        prompt,
+                        generation_config=generation_config,
+                    ),
+                )
+                break
+            except ResourceExhausted:
+                if attempt >= MAX_GEMINI_RETRIES:
+                    logger.exception(
+                        "Gemini generate_content call exhausted after %d retries",
+                        MAX_GEMINI_RETRIES,
+                    )
+                    return {
+                        "answer": FALLBACK_ANSWER,
+                        "context_chunks": context_chunks,
+                    }
+                delay = RETRY_BASE_DELAY_S * (2 ** attempt)
+                logger.warning(
+                    "Gemini RESOURCE_EXHAUSTED; retrying in %.0fs (attempt %d/%d)",
+                    delay,
+                    attempt + 1,
+                    MAX_GEMINI_RETRIES,
+                )
+                await asyncio.sleep(delay)
+            except Exception:
+                logger.exception("Gemini generate_content call failed")
+                return {
+                    "answer": FALLBACK_ANSWER,
+                    "context_chunks": context_chunks,
+                }
 
         answer_text = response.text if response.text else None
 
