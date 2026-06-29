@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "notes": "Golden question set for the Colonial Archives Graph-RAG retrieval. 'abstention'-category questions are OUT-OF-CORPUS: the archive-first design may answer them via the labelled web fallback, so success is 'no fabricated archive grounding' (zero archive citations, source_type != archive) rather than full refusal. In-domain questions MUST NOT abstain and are scored on Recall@5 + citation grounding + faithfulness; expected_doc_ids are filled from a live discovery pass (evals/discover.py -> results/discovery.json) against confirmed source documents.",
+  "notes": "Golden question set for the Colonial Archives Graph-RAG retrieval. 'abstention'-category questions are OUT-OF-CORPUS: the archive-first design may answer them via the labelled web fallback or abstain when fallback cannot answer, so success is 'no fabricated archive grounding' (zero archive citations/markers, and either source_type != archive or an explicit abstention) rather than full refusal. In-domain questions MUST NOT abstain and are scored on Recall@5 + citation grounding + faithfulness; expected_doc_ids are filled from a live discovery pass (evals/discover.py -> results/discovery.json) against confirmed source documents.",
   "questions": [
     {
       "id": "abstain-01",

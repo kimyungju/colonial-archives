@@ -124,6 +124,66 @@ class TestAggregateIncludesRankingMetrics:
         assert summary["mean_ndcg_at_5"] == 0.8
 
 
+class TestRunQuestion:
+    @pytest.mark.asyncio
+    async def test_out_of_corpus_abstention_with_no_archive_citations_passes(
+        self, monkeypatch
+    ):
+        from app.models.schemas import QueryResponse
+        from evals import runner
+
+        async def fake_query(
+            question: str, filter_categories: list[str] | None = None
+        ) -> QueryResponse:
+            return QueryResponse(
+                answer=metrics.FALLBACK_ANSWER,
+                source_type="archive",
+                citations=[],
+                graph=None,
+            )
+
+        monkeypatch.setattr(runner.hybrid_retrieval_service, "query", fake_query)
+        task = {
+            "id": "abstain-test",
+            "category": "abstention",
+            "question": "Who is the current CEO of Tesla?",
+        }
+
+        result = await runner.run_question(task, use_judge=False)
+
+        assert result["success"] is True
+        assert result["no_false_archive_grounding"] is True
+
+    @pytest.mark.asyncio
+    async def test_out_of_corpus_archive_answer_without_citations_still_fails(
+        self, monkeypatch
+    ):
+        from app.models.schemas import QueryResponse
+        from evals import runner
+
+        async def fake_query(
+            question: str, filter_categories: list[str] | None = None
+        ) -> QueryResponse:
+            return QueryResponse(
+                answer="Elon Musk is the current CEO of Tesla.",
+                source_type="archive",
+                citations=[],
+                graph=None,
+            )
+
+        monkeypatch.setattr(runner.hybrid_retrieval_service, "query", fake_query)
+        task = {
+            "id": "abstain-test",
+            "category": "abstention",
+            "question": "Who is the current CEO of Tesla?",
+        }
+
+        result = await runner.run_question(task, use_judge=False)
+
+        assert result["success"] is False
+        assert result["no_false_archive_grounding"] is False
+
+
 class TestKeywordCoverage:
     def test_full_coverage(self):
         assert metrics.expected_keywords_present("Tin and gambier trade", ["tin", "gambier"]) == 1.0

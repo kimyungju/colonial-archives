@@ -75,13 +75,13 @@ async def run_question(task: dict, use_judge: bool) -> dict:
     abstained = metrics.is_abstention(answer)
     markers = metrics.citation_markers(answer)
 
-    # Colonial Archives is archive-first WITH a labelled web fallback. For an
-    # out-of-corpus question the correct behaviour is NOT necessarily a full
-    # refusal — it is to avoid presenting archive citations as if the archive
-    # supported the answer. So the guarantee we score is "no fabricated archive
-    # grounding": zero archive citations and source_type not "archive".
     out_of_corpus = task["category"] == "abstention"
-    no_false_archive_grounding = (len(archive_cites) == 0 and resp.source_type != "archive")
+    archive_markers = [marker for marker in markers if marker[0] == "archive"]
+    has_archive_grounding = bool(archive_cites) or bool(archive_markers)
+    safe_fallback_or_abstention = resp.source_type != "archive" or abstained
+    no_false_archive_grounding = (
+        not has_archive_grounding and safe_fallback_or_abstention
+    )
 
     recall = metrics.recall_at_k(task.get("expected_doc_ids", []), cited_docs, K)
     rr = metrics.mrr(task.get("expected_doc_ids", []), cited_docs)
@@ -99,7 +99,11 @@ async def run_question(task: dict, use_judge: bool) -> dict:
     if out_of_corpus:
         success = no_false_archive_grounding
         reason = ("no fabricated archive grounding" if success
-                  else f"presented archive grounding for out-of-corpus q (src={resp.source_type}, archive_cites={len(archive_cites)})")
+                  else (
+                      "presented archive grounding for out-of-corpus q "
+                      f"(src={resp.source_type}, archive_cites={len(archive_cites)}, "
+                      f"archive_markers={len(archive_markers)}, abstained={abstained})"
+                  ))
     else:
         checks = [not abstained]
         if recall is not None:
