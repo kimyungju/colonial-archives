@@ -233,10 +233,7 @@ class HybridRetrievalService:
             except Exception:
                 logger.exception("Web fallback failed")
 
-        # A gated query must never go out with archive grounding. If the web
-        # fallback could not produce an answer, abstain with no citations
-        # (same shape as the no-results early exit in step 3).
-        if gated and source_type == "archive":
+        if answer_text.strip() == FALLBACK_ANSWER and source_type == "archive":
             return QueryResponse(
                 answer=FALLBACK_ANSWER,
                 source_type="archive",
